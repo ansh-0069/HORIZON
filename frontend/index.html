@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Horizon | Media Revenue Planning</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">NETELIXIR PLANNING PROTOTYPE</p>
+          <h1>Horizon</h1>
+          <p class="subhead">Probabilistic revenue planning for cross-channel media.</p>
+        </div>
+        <div class="status"><span></span> Offline forecast · Evidence-grounded insights</div>
+      </header>
+
+      <section class="control-panel">
+        <div class="control"><label for="horizon">Planning horizon</label><select id="horizon"><option value="30">30 days</option><option value="60" selected>60 days</option><option value="90">90 days</option></select></div>
+        <div class="control"><label for="target">ROAS guardrail</label><input id="target" type="number" min="0.1" step="0.1" value="4.0" /></div>
+        <div class="control"><label for="google">Google budget</label><input id="google" type="number" min="0" step="100" /></div>
+        <div class="control"><label for="meta">Meta budget</label><input id="meta" type="number" min="0" step="100" /></div>
+        <div class="control"><label for="microsoft">Microsoft budget</label><input id="microsoft" type="number" min="0" step="100" /></div>
+        <div class="button-stack"><button id="forecast">Simulate plan</button><button id="optimize" class="secondary">Recommend allocation</button><button id="save" class="outline">Save decision</button></div>
+      </section>
+
+      <section id="notice" class="notice loading">Loading the baseline plan…</section>
+
+      <section class="metric-grid" aria-label="Forecast summary">
+        <article class="metric"><p>Expected revenue</p><strong id="revenue">—</strong><span id="revenue-range">P10-P90: —</span></article>
+        <article class="metric"><p>Expected blended ROAS</p><strong id="roas">—</strong><span id="roas-range">P10-P90: —</span></article>
+        <article class="metric"><p>Probability of guardrail</p><strong id="probability">—</strong><span id="risk">Risk: —</span></article>
+        <article class="metric"><p>Decision posture</p><strong id="decision">—</strong><span>Forecast is conditional, not causal.</span></article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel"><div class="panel-header"><div><p class="eyebrow">ALLOCATION OUTLOOK</p><h2>Channel contribution</h2></div><p>Median forecast</p></div><div id="channels" class="table-wrap"></div></article>
+        <article class="panel evidence"><div class="panel-header"><div><p class="eyebrow">EVIDENCE BRIEF</p><h2 id="headline">—</h2></div><button id="ai-brief" class="outline compact">Generate grounded AI brief</button></div><div id="evidence"></div><div id="ai-evidence" class="ai-evidence" aria-live="polite"></div></article>
+      </section>
+
+      <section class="grid-two">
+        <article class="panel"><div class="panel-header"><div><p class="eyebrow">TRUST CENTER</p><h2>Data health and backtest</h2></div></div><div id="health"></div><div id="trust"></div></article>
+        <article class="panel"><div class="panel-header"><div><p class="eyebrow">OPERATIONAL RISK</p><h2>Model boundaries</h2></div></div><ul class="boundary"><li>Platform attribution is treated as the source of truth.</li><li>Budget changes are conditional forecasts, not causal claims.</li><li>Wide ranges and support warnings require validation before action.</li></ul></article>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

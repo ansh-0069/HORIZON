@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import math
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+
+NUMERIC_FEATURES = (
+    "log_planned_budget", "recent_roas", "long_roas", "log_recent_spend",
+    "log_recent_revenue", "recent_active_days", "trend_ratio", "month_sin", "month_cos",
+)
+
+
+@dataclass
+class DirectRidgeModel:
+    horizon_days: int
+    category_columns: tuple[str, ...]
+    categories: dict[str, tuple[str, ...]]
+    numeric_mean: list[float]
+    numeric_scale: list[float]
+    coefficients: list[float]
+    residual_p10: float
+    residual_p90: float
+    sample_count: int
+
+    @staticmethod
+    def _design(frame: pd.DataFrame, categories: dict[str, tuple[str, ...]], mean: np.ndarray | None = None, scale: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        numeric = frame.loc[:, NUMERIC_FEATURES].astype(float).to_numpy()
+        if mean is None:
+            mean = numeric.mean(axis=0)
+        if scale is None:
+            scale = numeric.std(axis=0)
+        scale = np.where(scale < 1e-8, 1.0, scale)
+        standardized = (numeric - mean) / scale
+        parts = [np.ones((len(frame), 1)), standardized]
+        for column, values in categories.items():
+            observed = frame[column].astype(str).to_numpy()
+            parts.append(np.column_stack([(observed == value).astype(float) for value in values]))
+        return np.column_stack(parts), mean, scale
+
+    def predict(self, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        x, _, _ = self._design(frame, self.categories, np.asarray(self.numeric_mean), np.asarray(self.numeric_scale))
+        predicted_log = x @ np.asarray(self.coefficients)
+        p10 = np.maximum(0.0, np.expm1(predicted_log + self.residual_p10))
+        p50 = np.maximum(0.0, np.expm1(predicted_log))
+        p90 = np.maximum(0.0, np.expm1(predicted_log + self.residual_p90))
+        return p10, p50, p90
+
+
+def _features(history: pd.DataFrame, cutoff: pd.Timestamp, horizon_days: int, planned_budget: float) -> dict[str, Any]:
+    recent = history[(history["date"] > cutoff - pd.Timedelta(days=28)) & (history["date"] <= cutoff)]
+    previous = history[(history["date"] > cutoff - pd.Timedelta(days=56)) & (history["date"] <= cutoff - pd.Timedelta(days=28))]
+    recent_spend = float(recent["spend"].sum())
+    recent_revenue = float(recent["revenue"].sum())
+    history_spend = float(history["spend"].sum())
+    history_revenue = float(history["revenue"].sum())
+    previous_spend = float(previous["spend"].sum())
+    return {
+        "log_planned_budget": math.log1p(max(planned_budget, 0.0)),
+        "recent_roas": recent_revenue / max(recent_spend, 1e-9),
+        "long_roas": history_revenue / max(history_spend, 1e-9),
+        "log_recent_spend": math.log1p(max(recent_spend, 0.0)),
+        "log_recent_revenue": math.log1p(max(recent_revenue, 0.0)),
+        "recent_active_days": float(recent["date"].nunique()),
+        "trend_ratio": recent_spend / max(previous_spend, 1.0),
+        "month_sin": math.sin(2 * math.pi * (cutoff.month + horizon_days / 60.0) / 12.0),
+        "month_cos": math.cos(2 * math.pi * (cutoff.month + horizon_days / 60.0) / 12.0),
+    }
+
+
+def training_frame(canonical: pd.DataFrame, horizon_days: int, step_days: int = 21) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    keys = ["source_system", "source_campaign_id", "channel", "campaign_type", "campaign_name"]
+    for key, group in canonical.groupby(keys, dropna=False):
+        group = group.sort_values("date")
+        minimum = group["date"].min() + pd.Timedelta(days=56)
+        maximum = group["date"].max() - pd.Timedelta(days=horizon_days)
+        for cutoff in pd.date_range(minimum, maximum, freq=f"{step_days}D"):
+            history = group[group["date"] <= cutoff]
+            future = group[(group["date"] > cutoff) & (group["date"] <= cutoff + pd.Timedelta(days=horizon_days))]
+            planned_budget = float(future["spend"].sum())
+            if len(history) < 28 or planned_budget <= 0:
+                continue
+            feature_row = _features(history, cutoff, horizon_days, planned_budget)
+            feature_row.update({"channel": str(key[2]), "campaign_type": str(key[3]), "target_log_revenue": math.log1p(max(float(future["revenue"].sum()), 0.0))})
+            rows.append(feature_row)
+    return pd.DataFrame(rows)
+
+
+def fit_direct_ridge(canonical: pd.DataFrame, horizon_days: int, ridge_alpha: float = 4.0) -> DirectRidgeModel | None:
+    frame = training_frame(canonical, horizon_days)
+    if len(frame) < 80:
+        return None
+    categories = {column: tuple(sorted(frame[column].astype(str).unique())) for column in ("channel", "campaign_type")}
+    x, mean, scale = DirectRidgeModel._design(frame, categories)
+    y = frame["target_log_revenue"].to_numpy(dtype=float)
+    penalty = np.eye(x.shape[1]) * ridge_alpha
+    penalty[0, 0] = 0.0
+    coefficients = np.linalg.solve(x.T @ x + penalty, x.T @ y)
+    residuals = y - x @ coefficients
+    return DirectRidgeModel(
+        horizon_days=horizon_days,
+        category_columns=("channel", "campaign_type"),
+        categories=categories,
+        numeric_mean=mean.tolist(), numeric_scale=scale.tolist(), coefficients=coefficients.tolist(),
+        residual_p10=float(np.quantile(residuals, 0.10)), residual_p90=float(np.quantile(residuals, 0.90)),
+        sample_count=len(frame),
+    )
+
+
+def inference_features(history: pd.DataFrame, channel: str, campaign_type: str, cutoff: pd.Timestamp, horizon_days: int, planned_budget: float) -> pd.DataFrame:
+    row = _features(history, cutoff, horizon_days, planned_budget)
+    row.update({"channel": str(channel), "campaign_type": str(campaign_type)})
+    return pd.DataFrame([row])
