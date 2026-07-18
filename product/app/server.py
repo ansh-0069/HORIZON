@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +13,7 @@ from product.app.service import PlannerService
 
 PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PRODUCT_ROOT.parent
+LOGGER = logging.getLogger("horizon.planner")
 
 
 def make_handler(service: PlannerService):
@@ -75,7 +77,9 @@ def make_handler(service: PlannerService):
                 self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": {"code": "FORECAST_FAILED", "message": str(exc)}})
 
         def log_message(self, fmt: str, *args) -> None:
-            print("planner-api", fmt % args)
+            # Standard request logging avoids ad-hoc prints while retaining a
+            # useful local-demo audit trail. Request bodies are never logged.
+            LOGGER.info("planner_api_request %s", fmt % args)
 
     return PlannerHandler
 
@@ -87,9 +91,10 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4173)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     service = PlannerService(args.data_dir, args.model)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(service))
-    print(f"Horizon planner available at http://{args.host}:{args.port}")
+    LOGGER.info("planner_server_started host=%s port=%s", args.host, args.port)
     server.serve_forever()
 
 
