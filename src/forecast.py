@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import pandas as pd
 
@@ -50,7 +51,29 @@ def build_forecast(model: HorizonModel, canonical: pd.DataFrame, horizon_days: i
 
     all_levels["probability_roas_above_target"] = all_levels.apply(target_probability, axis=1)
     all_levels["risk_score"] = all_levels.apply(_risk, axis=1)
-    seed_text = f"{model.model_version}|{canonical['date'].max().date()}|{horizon_days}|{len(canonical)}"
+    identity_columns = ["source_system", "source_campaign_id", "date", "channel", "campaign_type", "campaign_name", "spend", "revenue"]
+    canonical_payload = canonical.loc[:, identity_columns].sort_values(identity_columns[:6], kind="stable").to_csv(
+        index=False,
+        date_format="%Y-%m-%d",
+        float_format="%.12g",
+    )
+    scenario_payload = json.dumps(
+        {
+            "budget_overrides": {str(key): float(value) for key, value in sorted((budget_overrides or {}).items())},
+            "target_roas": float(model.target_roas),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    seed_text = "|".join(
+        [
+            model.model_version,
+            getattr(model, "artifact_sha256", "") or "unhashed-artifact",
+            hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest(),
+            str(horizon_days),
+            scenario_payload,
+        ]
+    )
     all_levels["forecast_id"] = hashlib.sha256(seed_text.encode()).hexdigest()[:16]
     all_levels["horizon_days"] = horizon_days
     all_levels["model_version"] = model.model_version

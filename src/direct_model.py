@@ -25,6 +25,8 @@ class DirectRidgeModel:
     residual_p10: float
     residual_p90: float
     sample_count: int
+    calibration_sample_count: int = 0
+    uncertainty_method: str = "temporal_holdout_residual_quantiles"
 
     @staticmethod
     def _design(frame: pd.DataFrame, categories: dict[str, tuple[str, ...]], mean: np.ndarray | None = None, scale: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

@@ -15,6 +15,28 @@ class HorizonModel:
     direct_models: dict[int, DirectRidgeModel]
     min_history_days: int = 28
     target_roas: float = 4.0
+    artifact_sha256: str = ""
+
+    @staticmethod
+    def campaign_key(source_system: object, campaign_id: object) -> str:
+        """Return the source-qualified campaign identity used by scenarios."""
+        return f"{source_system}:{campaign_id}"
+
+    def direct_quantiles(
+        self,
+        history: pd.DataFrame,
+        channel: str,
+        campaign_type: str,
+        as_of: pd.Timestamp,
+        horizon_days: int,
+        planned_budget: float,
+    ) -> tuple[float, float, float] | None:
+        """Evaluate the exact direct-ridge response used by forecast inference."""
+        direct_model = self.direct_models.get(horizon_days)
+        if direct_model is None:
+            return None
+        direct_features = inference_features(history, channel, campaign_type, as_of, horizon_days, planned_budget)
+        return tuple(float(value[0]) for value in direct_model.predict(direct_features))
 
     def forecast_campaigns(self, canonical: pd.DataFrame, horizon_days: int, budget_overrides: dict[str, float] | None = None) -> pd.DataFrame:
         budget_overrides = budget_overrides or {}
@@ -24,6 +46,7 @@ class HorizonModel:
         future_dates = pd.date_range(as_of + pd.Timedelta(days=1), periods=horizon_days, freq="D")
         seasonal_factor = sum(self.month_roas_factors.get(int(date.month), 1.0) for date in future_dates) / horizon_days
         group_keys = ["source_system", "source_campaign_id", "channel", "campaign_type", "campaign_name"]
+        source_counts = canonical.groupby("source_campaign_id", dropna=False)["source_system"].nunique()
         rows: list[dict[str, object]] = []
         for key, history in canonical.groupby(group_keys, dropna=False):
             source, campaign_id, channel, campaign_type, campaign_name = key
@@ -43,7 +66,14 @@ class HorizonModel:
             roas = reliability * recent_roas + (1.0 - reliability) * historic_roas
             roas = (0.70 * roas + 0.30 * self.global_roas) * seasonal_factor
             daily_spend = recent_spend / max(active_days, 1)
-            override = budget_overrides.get(str(campaign_id))
+            campaign_key = self.campaign_key(source, campaign_id)
+            override = budget_overrides.get(campaign_key)
+            # Legacy unqualified IDs remain accepted only when unambiguous. New
+            # product callers must use source-qualified campaign keys.
+            if override is None and str(campaign_id) in budget_overrides:
+                if int(source_counts.loc[campaign_id]) > 1:
+                    raise ValueError(f"Ambiguous unqualified campaign budget override: {campaign_id}")
+                override = budget_overrides[str(campaign_id)]
             planned_budget = float(override) if override is not None else max(0.0, daily_spend * horizon_days)
             support = max(historic_spend / max(int(history["date"].nunique()), 1) * horizon_days, 1.0)
             extrapolation = planned_budget > 1.5 * support
@@ -54,9 +84,9 @@ class HorizonModel:
             saturation_scale = max(baseline_budget * 1.5, 1.0)
             normalization = baseline_budget / (saturation_scale * math.log1p(baseline_budget / saturation_scale))
             revenue_p50 = max(0.0, roas * saturation_scale * math.log1p(planned_budget / saturation_scale) * normalization)
-            if horizon_days in self.direct_models:
-                direct_features = inference_features(history, str(channel), str(campaign_type), as_of, horizon_days, planned_budget)
-                revenue_p10, revenue_p50, revenue_p90 = (float(value[0]) for value in self.direct_models[horizon_days].predict(direct_features))
+            direct_quantiles = self.direct_quantiles(history, str(channel), str(campaign_type), as_of, horizon_days, planned_budget)
+            if direct_quantiles is not None:
+                revenue_p10, revenue_p50, revenue_p90 = direct_quantiles
             else:
                 revenue_p10 = revenue_p50 * math.exp(-1.28155 * sigma)
                 revenue_p90 = revenue_p50 * math.exp(1.28155 * sigma)
@@ -70,7 +100,7 @@ class HorizonModel:
                 flags.append("diminishing_returns")
             rows.append({
                 "level": "campaign", "channel": channel, "campaign_type": campaign_type,
-                "campaign_id": str(campaign_id), "campaign_name": campaign_name,
+                "campaign_id": str(campaign_id), "campaign_key": campaign_key, "campaign_name": campaign_name,
                 "planned_budget": planned_budget, "predicted_revenue_p10": revenue_p10,
                 "predicted_revenue_p50": revenue_p50, "predicted_revenue_p90": revenue_p90,
                 "predicted_spend_p10": spend_p10, "predicted_spend_p50": planned_budget,

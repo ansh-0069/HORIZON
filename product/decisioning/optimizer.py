@@ -20,7 +20,7 @@ class OptimizationResult:
     explanation: str
 
 
-def _marginal_revenue_per_dollar(base_budget: float, base_roas: float, allocated: float) -> float:
+def _fallback_marginal_revenue_per_dollar(base_budget: float, base_roas: float, allocated: float) -> float:
     baseline = max(base_budget, 1.0)
     scale = max(baseline * 1.5, 1.0)
     normalization = baseline / (scale * math.log1p(baseline / scale))
@@ -64,10 +64,35 @@ def recommend_allocation(
     if unknown:
         raise ValueError(f"Scenario includes inactive/unknown channels: {', '.join(sorted(unknown))}")
 
-    allocations = {str(row.campaign_id): 0.0 for row in leaves.itertuples()}
+    allocations = {str(row.campaign_key): 0.0 for row in leaves.itertuples()}
     channel_allocated: defaultdict[str, float] = defaultdict(float)
     by_channel = {channel: group.copy() for channel, group in leaves.groupby("channel")}
     step = max(100.0, round(total_budget / max(increments, 1) / 100.0) * 100.0)
+    as_of = canonical["date"].max()
+    history_by_key = {
+        model.campaign_key(source_system, campaign_id): group.copy()
+        for (source_system, campaign_id), group in canonical.groupby(["source_system", "source_campaign_id"], dropna=False)
+    }
+
+    def marginal_response(row: object, current: float, addition: float) -> tuple[float, float]:
+        """Score the exact direct-ridge response used by the forecast when available."""
+        campaign_key = str(row.campaign_key)
+        history = history_by_key[campaign_key]
+        current_quantiles = model.direct_quantiles(
+            history, str(row.channel), str(row.campaign_type), as_of, horizon_days, current,
+        )
+        next_budget = current + addition
+        next_quantiles = model.direct_quantiles(
+            history, str(row.channel), str(row.campaign_type), as_of, horizon_days, next_budget,
+        )
+        if current_quantiles is not None and next_quantiles is not None:
+            current_revenue = current_quantiles[1]
+            next_revenue = next_quantiles[1]
+            return max(0.0, (next_revenue - current_revenue) / max(addition, 1e-9)), next_revenue / max(next_budget, 1e-9)
+        return (
+            _fallback_marginal_revenue_per_dollar(float(row.planned_budget), float(row.predicted_roas_p50), current),
+            float(row.predicted_roas_p50),
+        )
 
     def add_to_best(channel: str, amount: float) -> float:
         remaining = amount
@@ -75,12 +100,13 @@ def recommend_allocation(
         while remaining > 1e-6:
             candidates = []
             for row in group.itertuples():
-                campaign_id = str(row.campaign_id)
+                campaign_id = str(row.campaign_key)
                 cap = float(row.planned_budget) * max_multiple_of_baseline
                 current = allocations[campaign_id]
                 if current + 1e-6 >= cap:
                     continue
-                marginal = _marginal_revenue_per_dollar(float(row.planned_budget), float(row.predicted_roas_p50), current)
+                candidate_addition = min(step, remaining, cap - current)
+                marginal, _ = marginal_response(row, current, candidate_addition)
                 candidates.append((marginal, campaign_id, cap))
             if not candidates:
                 break
@@ -100,15 +126,18 @@ def recommend_allocation(
     while remaining > 1e-6:
         candidates = []
         for row in leaves.itertuples():
-            campaign_id = str(row.campaign_id)
+            campaign_id = str(row.campaign_key)
             channel = str(row.channel)
             cap = float(row.planned_budget) * max_multiple_of_baseline
             current = allocations[campaign_id]
             channel_cap = maximums.get(channel, math.inf)
             if current + 1e-6 >= cap or channel_allocated[channel] + 1e-6 >= channel_cap:
                 continue
-            marginal = _marginal_revenue_per_dollar(float(row.planned_budget), float(row.predicted_roas_p50), current)
-            if target_roas is not None and float(row.predicted_roas_p50) < target_roas:
+            candidate_addition = min(step, remaining, cap - current, channel_cap - channel_allocated[channel])
+            if candidate_addition <= 1e-6:
+                continue
+            marginal, candidate_roas = marginal_response(row, current, candidate_addition)
+            if target_roas is not None and candidate_roas < target_roas:
                 marginal *= 0.55
             candidates.append((marginal, campaign_id, channel, cap, channel_cap))
         if not candidates:
@@ -129,8 +158,8 @@ def recommend_allocation(
         campaign_budgets=allocations,
         status="feasible",
         explanation=(
-            "Allocation uses discrete marginal returns from a concave response curve, campaign support caps, "
-            "channel constraints, and a ROAS-target penalty. The selected allocation is then reforecast through "
-            "the shared probabilistic model."
+            "Allocation uses discrete marginal returns from the same direct-ridge response used by scenario forecasts "
+            "when available, with a documented fallback curve, campaign support caps, channel constraints, and a "
+            "ROAS-target penalty. The selected allocation is reforecast through the shared probabilistic model."
         ),
     )

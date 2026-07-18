@@ -39,5 +39,5 @@
     "network_imports": [],
     "training_calls_in_predict": false
   },
-  "runner_stdout": "Wrote 156 forecast rows to D:\\Coding\\PROJECTS\\netelixir\\product\\output\\horizon-evaluator-3i6anvai\\predictions.csv\nWarnings: missing configured budget rows=21;taxonomy or Meta revenue semantic requires documented review"
+  "runner_stdout": "Wrote 156 forecast rows to D:\\Coding\\PROJECTS\\netelixir\\product\\output\\horizon-evaluator-mz87eatj\\predictions.csv\nWarnings: taxonomy or source-attributed revenue semantics require documented review"
 }

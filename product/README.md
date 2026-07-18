@@ -41,6 +41,12 @@ Run tests:
 python -m unittest discover -s product/tests -v
 ```
 
+Run repository-controlled submission release gates:
+
+```bash
+python -m product.scripts.release_check --strict
+```
+
 ## Optional OpenAI narrative
 
 Only the **Generate grounded AI brief** UI action can use `OPENAI_API_KEY`; it reads `product/.env.local`. Forecasting, optimization, training, tests, and the submission runner do not need a key or internet connection. If the key, credits, or network are unavailable, the product UI falls back to deterministic evidence.

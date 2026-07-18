@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
+import hashlib
+import json
 from pathlib import Path
 import pickle
+import sys
 
 import pandas as pd
 
@@ -17,11 +21,16 @@ from src.validate import validate_canonical
 def load_model(path: Path) -> HorizonModel:
     if not path.is_file():
         raise FileNotFoundError(f"Model file does not exist: {path}")
-    with path.open("rb") as handle:
-        model = pickle.load(handle)
+    artifact = path.read_bytes()
+    model = pickle.loads(artifact)
     if not isinstance(model, HorizonModel):
         raise TypeError("Model artifact is not a HorizonModel")
-    return model
+    return replace(model, artifact_sha256=hashlib.sha256(artifact).hexdigest())
+
+
+def _log(event: str, **fields: object) -> None:
+    """Emit deterministic structured diagnostics without contaminating CSV output."""
+    print(json.dumps({"event": event, **fields}, sort_keys=True, default=str), file=sys.stderr)
 
 
 def generate_predictions(data_dir: Path, model_path: Path, output_path: Path) -> int:
@@ -30,8 +39,10 @@ def generate_predictions(data_dir: Path, model_path: Path, output_path: Path) ->
     quality = validate_canonical(canonical)
     quality.raise_if_blocking()
     model = load_model(model_path)
+    _log("input_validated", rows=len(canonical), model_version=model.model_version, model_sha256=model.artifact_sha256)
     forecasts = [build_forecast(model, canonical, horizon) for horizon in (30, 60, 90)]
     output = write_predictions_csv(pd.concat(forecasts, ignore_index=True), output_path)
+    _log("predictions_written", rows=len(output), output_path=output_path, horizons=[30, 60, 90])
     print(f"Wrote {len(output)} forecast rows to {output_path}")
     if quality.warnings:
         print("Warnings: " + quality.summary())

@@ -1,103 +1,167 @@
 {
-  "model_family": "horizon-direct-ridge-v1",
-  "baseline_model_family": "horizon-statistical-v3",
+  "model_family": "horizon-direct-ridge-v2",
+  "baseline_model_family": "horizon-statistical-v4",
+  "data_fingerprint": "916f6df4d0d0310c58aef698927906937e57e574cea8a3eb296a2e2a9971f68f",
   "horizons": [
     {
       "horizon_days": 30,
-      "folds": 2,
+      "folds": 3,
       "revenue_interval_coverage": 1.0,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.1537,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 0.2754,
+      "uncertainty_method": "temporal_holdout_residual_quantiles",
+      "median_calibration_samples": 141,
       "fold_results": [
+        {
+          "cutoff": "2026-03-07",
+          "actual_revenue": 350133.26806964003,
+          "actual_spend": 48443.997567,
+          "actual_roas": 7.2275882597300445,
+          "predicted_revenue_p10": 192946.9649298231,
+          "predicted_revenue_p50": 534023.7492964455,
+          "predicted_revenue_p90": 1249167.8972440918,
+          "predicted_roas_p10": 2.7630089506278726,
+          "predicted_roas_p50": 6.882519036884227,
+          "predicted_roas_p90": 15.332690360991574,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 146
+        },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 376339.35690114903,
           "actual_spend": 68180.310644,
           "actual_roas": 5.519765946303556,
-          "predicted_revenue_p10": 132237.5549391241,
+          "predicted_revenue_p10": 74781.14015901896,
           "predicted_revenue_p50": 302822.39478778635,
-          "predicted_revenue_p90": 684757.8911334538,
-          "predicted_roas_p10": 3.0449871543245948,
+          "predicted_revenue_p90": 491077.6526668007,
+          "predicted_roas_p10": 1.7219587225034947,
           "predicted_roas_p50": 6.2756852418785005,
-          "predicted_roas_p90": 13.515151252609447
+          "predicted_roas_p90": 9.692460413391167,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 138
         },
         {
           "cutoff": "2026-05-06",
           "actual_revenue": 342801.16772662,
           "actual_spend": 68260.164856,
           "actual_roas": 5.021979780590701,
-          "predicted_revenue_p10": 167615.49742017378,
+          "predicted_revenue_p10": 101431.83393094344,
           "predicted_revenue_p50": 379830.73381722596,
-          "predicted_revenue_p90": 844298.4650910071,
-          "predicted_roas_p10": 2.5821396598614017,
+          "predicted_revenue_p90": 608965.406736792,
+          "predicted_roas_p10": 1.562571272923607,
           "predicted_roas_p50": 5.266209958072214,
-          "predicted_roas_p90": 11.148457127990767
+          "predicted_roas_p90": 8.041024602245125,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 141
         }
       ]
     },
     {
       "horizon_days": 60,
-      "folds": 2,
+      "folds": 3,
       "revenue_interval_coverage": 1.0,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.281,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 0.2257,
+      "uncertainty_method": "temporal_holdout_residual_quantiles",
+      "median_calibration_samples": 129,
       "fold_results": [
+        {
+          "cutoff": "2026-02-05",
+          "actual_revenue": 702407.09087761,
+          "actual_spend": 115196.594981,
+          "actual_roas": 6.097464000506801,
+          "predicted_revenue_p10": 240370.5409744064,
+          "predicted_revenue_p50": 781015.8625300663,
+          "predicted_revenue_p90": 1035622.296351116,
+          "predicted_roas_p10": 2.81116551905549,
+          "predicted_roas_p50": 8.220676162360142,
+          "predicted_roas_p90": 10.381492121522875,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 129
+        },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 726472.6249707891,
           "actual_spend": 116624.30821100001,
           "actual_roas": 6.229169854164829,
-          "predicted_revenue_p10": 563397.9493763956,
+          "predicted_revenue_p10": 351903.89335820306,
           "predicted_revenue_p50": 962294.2001675689,
-          "predicted_revenue_p90": 1735980.6307193735,
-          "predicted_roas_p10": 4.033941600114179,
+          "predicted_revenue_p90": 1488606.787642621,
+          "predicted_roas_p10": 2.519639548264344,
           "predicted_roas_p50": 6.20104270686661,
-          "predicted_roas_p90": 10.653993567326644
+          "predicted_roas_p90": 9.135820330697582,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 129
         },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 719140.524627769,
           "actual_spend": 136440.4755,
           "actual_roas": 5.270727194349077,
-          "predicted_revenue_p10": 322081.2332230771,
+          "predicted_revenue_p10": 182695.37320996463,
           "predicted_revenue_p50": 548675.7154035951,
-          "predicted_revenue_p90": 984957.6484681251,
-          "predicted_roas_p10": 3.7082250131771444,
+          "predicted_revenue_p90": 832593.8589414634,
+          "predicted_roas_p10": 2.103430696502883,
           "predicted_roas_p50": 5.685372266057961,
-          "predicted_roas_p90": 9.720115510042998
+          "predicted_roas_p90": 8.21650402375181,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 124
         }
       ]
     },
     {
       "horizon_days": 90,
-      "folds": 2,
-      "revenue_interval_coverage": 1.0,
+      "folds": 3,
+      "revenue_interval_coverage": 0.6667,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.2098,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 1.192,
+      "uncertainty_method": "temporal_holdout_residual_quantiles",
+      "median_calibration_samples": 113,
       "fold_results": [
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 874420.916111134,
+          "actual_spend": 146435.273907,
+          "actual_roas": 5.971381708661757,
+          "predicted_revenue_p10": 986125.9043389615,
+          "predicted_revenue_p50": 4026501.210482926,
+          "predicted_revenue_p90": 5404607.804222747,
+          "predicted_roas_p10": 1.7376437498082258,
+          "predicted_roas_p50": 6.385556010733659,
+          "predicted_roas_p90": 8.162924310911182,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 105
+        },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 1078746.447778759,
           "actual_spend": 183376.905625,
           "actual_roas": 5.882673415728595,
-          "predicted_revenue_p10": 620712.513782461,
+          "predicted_revenue_p10": 259939.35502246147,
           "predicted_revenue_p50": 991607.8368645651,
-          "predicted_revenue_p90": 1614970.925007818,
-          "predicted_roas_p10": 4.839543728106854,
+          "predicted_revenue_p90": 1346561.4863562272,
+          "predicted_roas_p10": 2.026683605299404,
           "predicted_roas_p50": 6.958191502466208,
-          "predicted_roas_p90": 10.792743000048938
+          "predicted_roas_p90": 8.99898061999866,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 113
         },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 1069273.7926974092,
           "actual_spend": 184884.47306700004,
           "actual_roas": 5.783469941848045,
-          "predicted_revenue_p10": 909005.7458972356,
+          "predicted_revenue_p10": 560266.9133017808,
           "predicted_revenue_p50": 1432767.0652033775,
-          "predicted_revenue_p90": 2326083.86557333,
-          "predicted_roas_p10": 4.339000638508307,
+          "predicted_revenue_p90": 2165422.3777468703,
+          "predicted_roas_p10": 2.6743488757070337,
           "predicted_roas_p50": 6.1551860534757825,
-          "predicted_roas_p90": 9.517034964693547
+          "predicted_roas_p90": 8.859697961606932,
+          "uncertainty_method": "temporal_holdout_residual_quantiles",
+          "calibration_sample_count": 115
         }
       ]
     }
@@ -105,11 +169,28 @@
   "baseline_horizons": [
     {
       "horizon_days": 30,
-      "folds": 2,
+      "folds": 3,
       "revenue_interval_coverage": 1.0,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.3747,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 0.4043,
+      "uncertainty_method": "statistical_lognormal_fallback",
+      "median_calibration_samples": 0,
       "fold_results": [
+        {
+          "cutoff": "2026-03-07",
+          "actual_revenue": 350133.26806964003,
+          "actual_spend": 48443.997567,
+          "actual_roas": 7.2275882597300445,
+          "predicted_revenue_p10": 63133.9122293614,
+          "predicted_revenue_p50": 512969.03180132475,
+          "predicted_revenue_p90": 4953692.540702195,
+          "predicted_roas_p10": 0.9040803758759596,
+          "predicted_roas_p50": 6.6111650115861,
+          "predicted_roas_p90": 60.803222719466696,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
+        },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 376339.35690114903,
@@ -120,7 +201,9 @@
           "predicted_revenue_p90": 3239917.711098975,
           "predicted_roas_p10": 1.8642059091760907,
           "predicted_roas_p50": 9.739697349301785,
-          "predicted_roas_p90": 63.946656881938615
+          "predicted_roas_p90": 63.946656881938615,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         },
         {
           "cutoff": "2026-05-06",
@@ -132,17 +215,36 @@
           "predicted_revenue_p90": 4029965.4239328047,
           "predicted_roas_p10": 1.2456219407619538,
           "predicted_roas_p50": 7.190464630436677,
-          "predicted_roas_p90": 53.213287259923206
+          "predicted_roas_p90": 53.213287259923206,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         }
       ]
     },
     {
       "horizon_days": 60,
-      "folds": 2,
+      "folds": 3,
       "revenue_interval_coverage": 1.0,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.3684,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 0.2552,
+      "uncertainty_method": "statistical_lognormal_fallback",
+      "median_calibration_samples": 0,
       "fold_results": [
+        {
+          "cutoff": "2026-02-05",
+          "actual_revenue": 702407.09087761,
+          "actual_spend": 115196.594981,
+          "actual_roas": 6.097464000506801,
+          "predicted_revenue_p10": 78074.86752945032,
+          "predicted_revenue_p50": 717931.5309684842,
+          "predicted_revenue_p90": 8241650.1018851595,
+          "predicted_roas_p10": 0.9130959834507558,
+          "predicted_roas_p50": 7.556674462053118,
+          "predicted_roas_p90": 82.61759707427217,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
+        },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 726472.6249707891,
@@ -153,7 +255,9 @@
           "predicted_revenue_p90": 10378388.534599617,
           "predicted_roas_p10": 0.9470500858773414,
           "predicted_roas_p50": 6.925390632415216,
-          "predicted_roas_p90": 63.69384699933043
+          "predicted_roas_p90": 63.69384699933043,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         },
         {
           "cutoff": "2026-04-06",
@@ -165,17 +269,36 @@
           "predicted_revenue_p90": 6228437.539381001,
           "predicted_roas_p10": 1.7918805694083921,
           "predicted_roas_p50": 9.36182689278136,
-          "predicted_roas_p90": 61.46572131708313
+          "predicted_roas_p90": 61.46572131708313,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         }
       ]
     },
     {
       "horizon_days": 90,
-      "folds": 2,
+      "folds": 3,
       "revenue_interval_coverage": 1.0,
       "roas_interval_coverage": 1.0,
-      "revenue_wape": 0.257,
+      "nominal_interval_coverage": 0.8,
+      "revenue_wape": 1.3638,
+      "uncertainty_method": "statistical_lognormal_fallback",
+      "median_calibration_samples": 0,
       "fold_results": [
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 874420.916111134,
+          "actual_spend": 146435.273907,
+          "actual_roas": 5.971381708661757,
+          "predicted_revenue_p10": 648804.372594284,
+          "predicted_revenue_p50": 4444550.287978979,
+          "predicted_revenue_p90": 36898021.53349065,
+          "predicted_roas_p10": 1.1432524568375868,
+          "predicted_roas_p50": 7.048532540490224,
+          "predicted_roas_p90": 55.72943827023375,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
+        },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 1078746.447778759,
@@ -186,7 +309,9 @@
           "predicted_revenue_p90": 12660426.735867783,
           "predicted_roas_p10": 0.93510281771896,
           "predicted_roas_p50": 7.738800187810015,
-          "predicted_roas_p90": 84.60878763529936
+          "predicted_roas_p90": 84.60878763529936,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         },
         {
           "cutoff": "2026-03-07",
@@ -198,7 +323,9 @@
           "predicted_revenue_p90": 15423855.890540026,
           "predicted_roas_p10": 0.9383064780349067,
           "predicted_roas_p50": 6.861452265992436,
-          "predicted_roas_p90": 63.10579681721128
+          "predicted_roas_p90": 63.10579681721128,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0
         }
       ]
     }

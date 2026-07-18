@@ -19,7 +19,7 @@ function renderHealth(health) {
 
 function renderTrust(trust) {
   const baseline = Object.fromEntries((trust.baseline_horizons || []).map((item) => [item.horizon_days, item]));
-  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; return `<p><strong>${item.horizon_days} days:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% revenue interval coverage across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.</p>`; }).join('');
+  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; const calibration = item.median_calibration_samples ? ` Temporal holdout residuals: median ${number.format(item.median_calibration_samples)} samples.` : ''; const nominal = Math.round((item.nominal_interval_coverage || 0.8) * 100); return `<p><strong>${item.horizon_days}:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% observed coverage for a nominal ${nominal}% P10-P90 interval across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.${calibration}</p>`; }).join('');
   byId('trust').innerHTML = `<div class="trust-summary"><h3>Rolling-origin backtest</h3>${lines}</div>`;
 }
 

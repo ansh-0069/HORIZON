@@ -14,6 +14,7 @@ The protected evaluator path is deliberately small: it reads CSV inputs, validat
 .
 ├── run.sh                 # Required evaluator entry point
 ├── requirements.txt       # Runtime dependencies only
+├── data/                  # Committed schema-compatible sample inputs
 ├── pickle/
 │   └── model.pkl          # Pre-trained inference artifact
 ├── src/
@@ -30,7 +31,7 @@ The protected evaluator path is deliberately small: it reads CSV inputs, validat
 ## Requirements
 
 - Bash-compatible shell (the evaluator entry point is `run.sh`)
-- Python 3.10+
+- Python 3.11+
 - `numpy==2.3.5`
 - `pandas==3.0.1`
 
@@ -54,24 +55,25 @@ The prediction command itself never installs packages and never accesses a netwo
 
 ## Offline Execution
 
-From the repository root:
+From the repository root (with the committed sample files in `./data`):
 
 ```bash
-chmod +x run.sh
-./run.sh DATA_DIR MODEL_PATH OUTPUT_PATH
+./run.sh
 ```
 
 Example:
 
 ```bash
-./run.sh ./product/supplied_data ./pickle/model.pkl ./output/predictions.csv
+./run.sh ./data ./pickle/model.pkl ./output/predictions.csv
 ```
 
-`run.sh` requires exactly three arguments. It selects `PYTHON_BIN` when explicitly provided, otherwise `python3`, `python`, or `py`. It then calls `python -m src.predict`; it does not train, download, or call an external service.
+`run.sh` accepts zero to three positional arguments. Its defaults are `./data`, `./pickle/model.pkl`, and `./output/predictions.csv`; supplied arguments override those defaults. It selects `PYTHON_BIN` when explicitly provided, otherwise `python3`, `python`, or `py`. It then calls `python -m src.predict`; it does not train, download, or call an external service.
 
 ## Expected Inputs
 
 `DATA_DIR` must contain exactly one schema-compatible CSV for each source. File names are not significant; headers identify the source. All numeric fields must be parseable as numbers and date fields must be parseable as dates.
+
+An optional `campaign_taxonomy.csv` may contain `source_system`, `source_campaign_id`, and `campaign_type` to override name-based Meta campaign-type inference. It is not required by the evaluator.
 
 | Source | Required columns |
 | --- | --- |
@@ -98,7 +100,7 @@ risk_score, quality_flags, model_version
 
 ## Model Details
 
-The serialized `HorizonModel` performs deterministic local inference. It estimates campaign-level future revenue using recent and longer-term performance, budget response, seasonal month factors, and a pre-trained direct ridge model where available. Revenue uncertainty is emitted as P10/P50/P90 estimates; spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels.
+The serialized `HorizonModel` performs deterministic local inference. It uses a pre-trained direct ridge model per 30/60/90-day horizon with budget, trend, seasonality, channel, and campaign-type features. P10/P90 are chronological holdout residual quantiles; they are not causal guarantees or conformal intervals. Spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels. See [current implementation truth](product/docs/current_implementation.md).
 
 The model artifact is loaded read-only. No fitting, hyperparameter search, feature-store write, or artifact mutation occurs during execution.
 
@@ -120,7 +122,7 @@ The output adapter separately rejects missing required output fields, null/non-f
 - Input files represent daily campaign statistics in a consistent currency and attribution convention.
 - Campaign IDs are stable within each source system.
 - Historical performance is sufficiently representative of the requested forecast period.
-- Meta's `conversion` field is treated as both revenue and conversions in this supplied schema; validate that business meaning before production use.
+- Meta's `conversion` field is treated as supplied platform-attributed revenue and conversions in this schema; confirm that business meaning before production use.
 - The bundled model is compatible with the input data and requested 30/60/90-day horizons.
 
 ## Error Handling
@@ -141,8 +143,8 @@ The command fails closed with a non-zero exit status and an actionable `ERROR: o
 
 | Symptom | Resolution |
 | --- | --- |
-| `Usage: ./run.sh ...` | Provide exactly `DATA_DIR MODEL_PATH OUTPUT_PATH`. |
-| Python not found | Install Python 3.10+ or set `PYTHON_BIN` to its executable. |
+| `Usage: ./run.sh ...` | Provide no more than `DATA_DIR MODEL_PATH OUTPUT_PATH`. |
+| Python not found | Install Python 3.11+ or set `PYTHON_BIN` to its executable. |
 | Missing schema-compatible source files | Put one complete Google, Microsoft, and Meta CSV in `DATA_DIR`; ensure headers match the input table. |
 | Duplicate source campaign-day records | Deduplicate upstream data by platform, campaign ID, and date. |
 | `Model artifact is not a HorizonModel` | Use the supplied compatible `pickle/model.pkl`. |

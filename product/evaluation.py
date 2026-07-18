@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,16 @@ import pandas as pd
 
 from product.training.model_builder import fit_horizon_model
 from src.forecast import build_forecast
+
+
+def canonical_fingerprint(canonical: pd.DataFrame) -> str:
+    columns = ["source_system", "source_campaign_id", "date", "channel", "campaign_type", "campaign_name", "spend", "revenue"]
+    payload = canonical.loc[:, columns].sort_values(columns[:6], kind="stable").to_csv(
+        index=False,
+        date_format="%Y-%m-%d",
+        float_format="%.12g",
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float | None:
@@ -37,6 +48,16 @@ def rolling_origin_backtest(canonical: pd.DataFrame, horizon_days: int, folds: i
             "predicted_roas_p10": float(overall["predicted_roas_p10"]),
             "predicted_roas_p50": float(overall["predicted_roas_p50"]),
             "predicted_roas_p90": float(overall["predicted_roas_p90"]),
+            "uncertainty_method": (
+                model.direct_models[horizon_days].uncertainty_method
+                if horizon_days in model.direct_models
+                else "statistical_lognormal_fallback"
+            ),
+            "calibration_sample_count": (
+                int(model.direct_models[horizon_days].calibration_sample_count)
+                if horizon_days in model.direct_models
+                else 0
+            ),
         })
     if not rows:
         raise ValueError(f"Insufficient history for {horizon_days}-day rolling-origin backtest")
@@ -44,14 +65,26 @@ def rolling_origin_backtest(canonical: pd.DataFrame, horizon_days: int, folds: i
     coverage = ((frame["actual_revenue"] >= frame["predicted_revenue_p10"]) & (frame["actual_revenue"] <= frame["predicted_revenue_p90"])).mean()
     roas_coverage = ((frame["actual_roas"] >= frame["predicted_roas_p10"]) & (frame["actual_roas"] <= frame["predicted_roas_p90"])).mean()
     wape = float((frame["actual_revenue"] - frame["predicted_revenue_p50"]).abs().sum() / max(frame["actual_revenue"].abs().sum(), 1e-9))
-    return {"horizon_days": horizon_days, "folds": len(frame), "revenue_interval_coverage": round(float(coverage), 4), "roas_interval_coverage": round(float(roas_coverage), 4), "revenue_wape": round(wape, 4), "fold_results": rows}
+    calibration_counts = [int(value) for value in frame["calibration_sample_count"] if int(value) > 0]
+    return {
+        "horizon_days": horizon_days,
+        "folds": len(frame),
+        "revenue_interval_coverage": round(float(coverage), 4),
+        "roas_interval_coverage": round(float(roas_coverage), 4),
+        "nominal_interval_coverage": 0.80,
+        "revenue_wape": round(wape, 4),
+        "uncertainty_method": str(frame["uncertainty_method"].iloc[-1]),
+        "median_calibration_samples": int(pd.Series(calibration_counts).median()) if calibration_counts else 0,
+        "fold_results": rows,
+    }
 
 
 def evaluate_all_horizons(canonical: pd.DataFrame, folds: int = 3) -> dict[str, Any]:
     horizons = (30, 60, 90)
     return {
-        "model_family": "horizon-direct-ridge-v1",
-        "baseline_model_family": "horizon-statistical-v3",
+        "model_family": "horizon-direct-ridge-v2",
+        "baseline_model_family": "horizon-statistical-v4",
+        "data_fingerprint": canonical_fingerprint(canonical),
         "horizons": [rolling_origin_backtest(canonical, horizon, folds, train_direct=True) for horizon in horizons],
         "baseline_horizons": [rolling_origin_backtest(canonical, horizon, folds, train_direct=False) for horizon in horizons],
     }

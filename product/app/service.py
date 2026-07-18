@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 from typing import Any, Mapping
 import math
@@ -17,7 +18,7 @@ from product.app.ledger import DecisionLedger
 from product.app.evidence import EvidenceGenerationError, OpenAIEvidenceClient, build_evidence_packet, evidence_status, load_evidence_config
 from product.decisioning.optimizer import recommend_allocation
 from product.decisioning.scenario import simulate_budget_plan
-from product.evaluation import evaluate_all_horizons
+from product.evaluation import canonical_fingerprint, evaluate_all_horizons
 
 
 class PlannerService:
@@ -62,8 +63,8 @@ class PlannerService:
             if subset.empty:
                 raise ValueError(f"Unknown or inactive channel in scenario: {channel}")
             weights = subset["planned_budget"] / max(float(subset["planned_budget"].sum()), 1e-9)
-            for campaign_id, weight in zip(subset["campaign_id"], weights, strict=True):
-                overrides[str(campaign_id)] = amount * float(weight)
+            for campaign_key, weight in zip(subset["campaign_key"], weights, strict=True):
+                overrides[str(campaign_key)] = amount * float(weight)
         return overrides
 
     @staticmethod
@@ -152,7 +153,16 @@ class PlannerService:
 
     def trust_report(self) -> dict[str, Any]:
         if self._trust_report is None:
-            self._trust_report = evaluate_all_horizons(self.canonical, folds=2)
+            report_path = PRODUCT_ROOT / "models" / "evaluation_report.json"
+            expected_fingerprint = canonical_fingerprint(self.canonical)
+            try:
+                stored = json.loads(report_path.read_text(encoding="utf-8"))
+                if stored.get("model_family") == self.model.model_version and stored.get("data_fingerprint") == expected_fingerprint:
+                    self._trust_report = stored
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+            if self._trust_report is None:
+                self._trust_report = evaluate_all_horizons(self.canonical, folds=2)
         return self._trust_report
 
     def llm_status(self) -> dict[str, Any]:

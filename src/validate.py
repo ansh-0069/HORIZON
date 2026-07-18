@@ -37,9 +37,13 @@ def validate_canonical(frame: pd.DataFrame) -> QualityReport:
     conflicts = frame.duplicated(keys, keep=False)
     if conflicts.any():
         report.blockers.append(f"duplicate source campaign-day records: {int(conflicts.sum())}")
+    hierarchy = frame.groupby(["source_system", "source_campaign_id"], dropna=False)[["channel", "campaign_type", "campaign_name"]].nunique(dropna=False)
+    inconsistent = hierarchy[(hierarchy > 1).any(axis=1)]
+    if not inconsistent.empty:
+        report.blockers.append(f"inconsistent campaign hierarchy records: {int(len(inconsistent))}")
     null_budget = int(frame["configured_budget"].isna().sum())
     if null_budget:
         report.warnings.append(f"missing configured budget rows={null_budget}")
-    if frame["quality_flags"].str.contains("unknown|requires_semantic", case=False, na=False).any():
-        report.warnings.append("taxonomy or Meta revenue semantic requires documented review")
+    if frame["quality_flags"].str.contains("unknown|requires_semantic|treated_as_attributed", case=False, na=False).any():
+        report.warnings.append("taxonomy or source-attributed revenue semantics require documented review")
     return report
