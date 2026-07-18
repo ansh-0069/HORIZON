@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -ne 3 ]]; then
-  echo "Usage: ./run.sh DATA_DIR MODEL_PATH OUTPUT_PATH" >&2
+if [[ "$#" -gt 3 ]]; then
+  echo "Usage: ./run.sh [DATA_DIR] [MODEL_PATH] [OUTPUT_PATH]" >&2
   exit 64
 fi
 
-DATA_DIR="$1"
-MODEL_PATH="$2"
-OUTPUT_PATH="$3"
+# The guide's local-development contract requires zero-argument execution;
+# evaluator-provided arguments still take precedence without any hard-coded
+# absolute path or interactive input.
+DATA_DIR="${1:-./data}"
+MODEL_PATH="${2:-./pickle/model.pkl}"
+OUTPUT_PATH="${3:-./output/predictions.csv}"
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 if [[ -n "${PYTHON_BIN:-}" ]]; then
