@@ -47,6 +47,16 @@ class HorizonModel:
         seasonal_factor = sum(self.month_roas_factors.get(int(date.month), 1.0) for date in future_dates) / horizon_days
         group_keys = ["source_system", "source_campaign_id", "channel", "campaign_type", "campaign_name"]
         source_counts = canonical.groupby("source_campaign_id", dropna=False)["source_system"].nunique()
+        # Reject ambiguity before excluding inactive campaigns. Otherwise an
+        # invalid legacy override could appear to work merely because the first
+        # colliding campaign has zero recent spend and is skipped below.
+        ambiguous_legacy_ids = [
+            str(campaign_id)
+            for campaign_id, source_count in source_counts.items()
+            if int(source_count) > 1 and str(campaign_id) in budget_overrides
+        ]
+        if ambiguous_legacy_ids:
+            raise ValueError(f"Ambiguous unqualified campaign budget override: {sorted(ambiguous_legacy_ids)[0]}")
         rows: list[dict[str, object]] = []
         for key, history in canonical.groupby(group_keys, dropna=False):
             source, campaign_id, channel, campaign_type, campaign_name = key
@@ -71,8 +81,6 @@ class HorizonModel:
             # Legacy unqualified IDs remain accepted only when unambiguous. New
             # product callers must use source-qualified campaign keys.
             if override is None and str(campaign_id) in budget_overrides:
-                if int(source_counts.loc[campaign_id]) > 1:
-                    raise ValueError(f"Ambiguous unqualified campaign budget override: {campaign_id}")
                 override = budget_overrides[str(campaign_id)]
             planned_budget = float(override) if override is not None else max(0.0, daily_spend * horizon_days)
             support = max(historic_spend / max(int(history["date"].nunique()), 1) * horizon_days, 1.0)

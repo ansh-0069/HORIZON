@@ -143,6 +143,13 @@ def rehearse(data_dir: Path, model_path: Path, runner: Path, bash: str | None, t
         model_after = _sha256(evaluator_model)
         if model_after != model_before:
             raise RuntimeError("Runner modified the pre-trained model artifact")
+        # A persisted rehearsal report is release evidence, not a record of a
+        # machine-specific temporary directory. Keep it comparable across runs.
+        runner_messages = [
+            line.replace(str(root), "<isolated-workspace>")
+            for line in completed.stdout.splitlines()
+            if line.strip()
+        ]
         return {
             "status": "passed",
             "rows": int(len(output)),
@@ -150,7 +157,7 @@ def rehearse(data_dir: Path, model_path: Path, runner: Path, bash: str | None, t
             "horizons": sorted(int(value) for value in output["horizon_days"].unique()),
             "model_unchanged": True,
             "dependency_audit": dependency_audit,
-            "runner_stdout": completed.stdout.strip(),
+            "runner_messages": runner_messages,
         }
 
 
@@ -165,7 +172,7 @@ def main() -> None:
     args = parser.parse_args()
     report = rehearse(args.data_dir, args.model, args.runner, args.bash, args.temporary_root)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps({"status": report["status"], "rows": report["rows"], "horizons": report["horizons"]}))
 
 
