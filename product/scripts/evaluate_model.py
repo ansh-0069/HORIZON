@@ -4,15 +4,19 @@ import argparse
 from pathlib import Path
 
 from src.canonicalize import canonicalize
-from src.evaluate import write_evaluation_report
 from src.ingest import read_source_files
 from src.validate import validate_canonical
+from product.evaluation import write_evaluation_report
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PRODUCT_ROOT = ROOT / "product"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Horizon rolling-origin backtests")
-    parser.add_argument("--data-dir", type=Path, default=Path("data"))
-    parser.add_argument("--output", type=Path, default=Path("models/evaluation_report.json"))
+    parser.add_argument("--data-dir", type=Path, default=PRODUCT_ROOT / "demo_data")
+    parser.add_argument("--output", type=Path, default=PRODUCT_ROOT / "models" / "evaluation_report.json")
     parser.add_argument("--folds", type=int, default=3)
     args = parser.parse_args()
     canonical = canonicalize(read_source_files(args.data_dir))

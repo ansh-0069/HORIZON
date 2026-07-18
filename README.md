@@ -1,103 +1,163 @@
-# Horizon MVP
+# Horizon Forecasting Submission
 
-Horizon is an offline-first probabilistic revenue-planning utility for e-commerce media. It standardizes Google Ads, Microsoft Ads, and Meta Ads campaign data and produces 30/60/90-day revenue and ROAS ranges at campaign, campaign-type, channel, and blended levels.
+## Project Overview
 
-## What is implemented
+Horizon generates probabilistic revenue, spend, and ROAS forecasts from historical Google Ads, Meta Ads, and Microsoft Ads campaign data. It writes forecasts for 30-, 60-, and 90-day horizons at campaign, campaign-type, channel, and overall levels.
 
-- Dynamic source discovery by CSV schema rather than filename.
-- Canonicalization with Google cost-micros conversion and explicit Meta metric/taxonomy warnings.
-- Blocking data-quality validation for duplicate campaign-days, required values, invalid metrics, and missing sources.
-- Pre-trained, pickled statistical forecast artifact with recent performance, seasonal adjustment, sparse-history fallback, and budget extrapolation risk.
-- P10/P50/P90 revenue, spend, and ROAS; ROAS target probability and transparent risk score.
-- Campaign-to-type-to-channel-to-total reconciled output.
-- Offline submission runner with no API or LLM dependency.
+**This submission requires no internet connection, no API key, and performs inference only.**
 
-## Quick start
+The protected evaluator path is deliberately small: it reads CSV inputs, validates and canonicalizes them, loads the supplied pre-trained `pickle/model.pkl`, and writes `predictions.csv`.
 
-Python 3.11+ is required. Install the pinned packages:
+## Repository Structure
+
+```text
+.
+├── run.sh                 # Required evaluator entry point
+├── requirements.txt       # Runtime dependencies only
+├── pickle/
+│   └── model.pkl          # Pre-trained inference artifact
+├── src/
+│   ├── ingest.py          # Source discovery and CSV loading
+│   ├── canonicalize.py    # Channel normalization
+│   ├── validate.py        # Input-quality checks
+│   ├── model.py           # Inference-only model interface
+│   ├── forecast.py        # Forecast and roll-up generation
+│   ├── output_adapter.py  # Sole predictions.csv writer
+│   └── predict.py         # CLI orchestration
+└── product/               # Optional product/demo material; not used by run.sh
+```
+
+## Requirements
+
+- Bash-compatible shell (the evaluator entry point is `run.sh`)
+- Python 3.10+
+- `numpy==2.3.5`
+- `pandas==3.0.1`
+
+No database, cloud credential, service, network endpoint, GPU, or environment variable is required.
+
+## Installation
+
+Install the pinned packages from `requirements.txt` using the evaluator's provisioned Python environment:
 
 ```bash
 python -m pip install -r requirements.txt
-python -m src.train --data-dir ./data --output ./pickle/model.pkl
-bash ./run.sh ./data ./pickle/model.pkl ./output/predictions.csv
 ```
 
-On Windows, use the equivalent command if Bash is unavailable:
-
-```powershell
-python -m src.predict --data-dir ./data --model ./pickle/model.pkl --output ./output/predictions.csv
-```
-
-## Evaluator contract
-
-The required entry point is:
+For a fully offline local setup, install from a pre-provisioned wheelhouse rather than an online package index:
 
 ```bash
+python -m pip install --no-index --find-links /path/to/wheelhouse -r requirements.txt
+```
+
+The prediction command itself never installs packages and never accesses a network.
+
+## Offline Execution
+
+From the repository root:
+
+```bash
+chmod +x run.sh
 ./run.sh DATA_DIR MODEL_PATH OUTPUT_PATH
 ```
 
-It reads schema-compatible CSV files dynamically from `DATA_DIR`, loads the existing artifact from `MODEL_PATH`, and overwrites `OUTPUT_PATH`. It makes no network calls and does not retrain at runtime.
-
-The supplied hackathon PDFs do not specify the final scorer CSV columns. `src/output_adapter.py` centralizes the output schema and is the only module that should change when organizers publish it.
-
-Before submission, run a clean-room rehearsal. It copies data and the pickle into a temporary evaluator-like directory, runs `run.sh`, validates the emitted contract, and confirms that inference did not modify the model artifact:
+Example:
 
 ```bash
-python -m scripts.rehearse_submission --data-dir ./data --model ./pickle/model.pkl
+./run.sh ./product/supplied_data ./pickle/model.pkl ./output/predictions.csv
 ```
 
-On Windows, pass a Bash path, for example `--bash "C:\\Program Files\\Git\\bin\\bash.exe"`.
+`run.sh` requires exactly three arguments. It selects `PYTHON_BIN` when explicitly provided, otherwise `python3`, `python`, or `py`. It then calls `python -m src.predict`; it does not train, download, or call an external service.
 
-## Local planner UI
+## Expected Inputs
 
-The planner UI is intentionally isolated from the evaluator path and uses only the Python standard library for serving:
+`DATA_DIR` must contain exactly one schema-compatible CSV for each source. File names are not significant; headers identify the source. All numeric fields must be parseable as numbers and date fields must be parseable as dates.
 
-```bash
-python -m app.server --host 127.0.0.1 --port 4174
-```
+| Source | Required columns |
+| --- | --- |
+| Google Ads | `campaign_id`, `segments_date`, `campaign_advertising_channel_type`, `campaign_name`, `metrics_cost_micros`, `metrics_conversions_value`, `metrics_clicks`, `metrics_impressions`, `metrics_conversions`, `campaign_budget_amount` |
+| Microsoft Ads | `CampaignId`, `TimePeriod`, `CampaignType`, `CampaignName`, `Revenue`, `Spend`, `Clicks`, `Impressions`, `Conversions`, `DailyBudget` |
+| Meta Ads | `campaign_id`, `date_start`, `campaign_name`, `conversion`, `spend`, `clicks`, `impressions`, `daily_budget` |
 
-Open [http://127.0.0.1:4174](http://127.0.0.1:4174). It supports 30/60/90-day scenarios, target-ROAS guardrails, Google/Meta/Microsoft budget inputs, channel drill-down, data-health warnings, and a deterministic evidence brief. It does not call an LLM or external service.
+`MODEL_PATH` must point to the supplied compatible `HorizonModel` pickle artifact, normally `pickle/model.pkl`. `OUTPUT_PATH` is the requested location of the generated CSV; its parent directory is created if needed.
 
-The **Recommend allocation** action uses a deterministic discrete optimizer over the same concave campaign response curves used by the forecast. It enforces campaign support caps and optional channel minimum/maximum constraints, penalizes candidates below the selected ROAS guardrail, and validates the chosen allocation through the shared forecasting pipeline. It is decision support, not an automated media-buying action.
+## Expected Outputs
 
-## Trust and decision ledger
-
-Run rolling-origin evaluation before demoing or promoting a model:
-
-```bash
-python -m scripts.evaluate_model --data-dir ./data --output ./models/evaluation_report.json --folds 3
-```
-
-The local Trust Center computes the same report on demand. It compares the direct multi-horizon ridge forecaster against the statistical fallback, displays median forecast error and empirical revenue-interval coverage for 30/60/90-day historical windows, and does not hide a regression behind aggregate scores. **Save decision** persists the scenario, forecast ID, summary, timestamp, and decision state to `output/horizon_decisions.sqlite`; it is an auditable local MVP equivalent of the production decision ledger.
-
-## Data assumptions and warnings
-
-- Existing platform attribution is used as supplied; Horizon does not create an attribution model.
-- Google `metrics_cost_micros` is converted by dividing by 1,000,000.
-- Meta's `conversion` field is treated provisionally as attributed revenue and produces a semantic-review warning. Confirm it with the organizer/client before a production forecast.
-- Mixed currency, invalid/missing revenue or spend, duplicate campaign-day facts, or missing source schemas block a run.
-- A forecast is conditional, not causal. The optional production LLM layer explains model evidence but never generates predictions.
-
-## Optional grounded AI narrative
-
-The product has an optional, separate `/api/evidence` endpoint for a decision-ready narrative. It uses an OpenAI Responses API structured-output contract, but only after the deterministic forecast has completed. The endpoint sends a compact evidence packet—not raw campaign rows—and validates all narrative list items against approved evidence IDs. It rejects numerical claims, causal language, attempts to change the deterministic decision, and uncited statements. If the service is unavailable, it returns the deterministic evidence brief instead.
-
-The local key belongs in `.env.local` and must never be committed:
+On success, `OUTPUT_PATH` is atomically replaced with a non-empty UTF-8 CSV. The current versioned contract (`horizon-v1`) is sorted by horizon and hierarchy and includes:
 
 ```text
-OPENAI_API_KEY=...
-# Optional; defaults to gpt-5.6-luna
-HORIZON_LLM_MODEL=gpt-5.6-luna
+forecast_id, horizon_days, level, channel, campaign_type, campaign_id,
+campaign_name, planned_budget, predicted_revenue_p10,
+predicted_revenue_p50, predicted_revenue_p90, predicted_spend_p10,
+predicted_spend_p50, predicted_spend_p90, predicted_roas_p10,
+predicted_roas_p50, predicted_roas_p90, probability_roas_above_target,
+risk_score, quality_flags, model_version
 ```
 
-This endpoint is excluded from `run.sh`; the offline evaluator still has no API or LLM dependency.
+`src/output_adapter.py` is the only component that writes this CSV. It applies the declared column order, type checks, compatibility aliases, and explicit defaults. See [`product/docs/output_adapter_contract.md`](product/docs/output_adapter_contract.md) for the schema contract and future-version procedure.
 
-## Output
+## Model Details
 
-`predictions.csv` includes a `forecast_id`, horizon, hierarchy level, forecasted revenue/spend/ROAS P10/P50/P90, probability of clearing the default 4.0 ROAS target, risk score, quality flags, and model version.
+The serialized `HorizonModel` performs deterministic local inference. It estimates campaign-level future revenue using recent and longer-term performance, budget response, seasonal month factors, and a pre-trained direct ridge model where available. Revenue uncertainty is emitted as P10/P50/P90 estimates; spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels.
 
-## Tests
+The model artifact is loaded read-only. No fitting, hyperparameter search, feature-store write, or artifact mutation occurs during execution.
 
-```bash
-python -m unittest discover -s tests -v
-```
+## Data Validation
+
+Before model loading, the pipeline:
+
+- verifies one recognizable CSV per required advertising platform;
+- canonicalizes Google cost micros to currency units;
+- checks required dates, spend, revenue, and campaign IDs for nulls;
+- rejects negative spend or revenue;
+- rejects duplicate `(source_system, campaign_id, date)` records; and
+- reports non-blocking warnings for missing configured budgets and uncertain Meta/taxonomy semantics.
+
+The output adapter separately rejects missing required output fields, null/non-finite numeric values, invalid integer horizons, and an empty output. It does not invent missing prediction values.
+
+## Assumptions
+
+- Input files represent daily campaign statistics in a consistent currency and attribution convention.
+- Campaign IDs are stable within each source system.
+- Historical performance is sufficiently representative of the requested forecast period.
+- Meta's `conversion` field is treated as both revenue and conversions in this supplied schema; validate that business meaning before production use.
+- The bundled model is compatible with the input data and requested 30/60/90-day horizons.
+
+## Error Handling
+
+The command fails closed with a non-zero exit status and an actionable `ERROR: offline prediction failed: ...` message for missing model/data paths, unsupported/missing source files, unreadable or malformed CSVs, quality blockers, incompatible pickle artifacts, and output-schema violations.
+
+`predictions.csv` is written through a same-directory temporary file and replaced only after successful serialization. A write failure preserves any pre-existing output file and removes the temporary file.
+
+## Reproducibility
+
+- Dependencies are pinned in `requirements.txt`.
+- The model is supplied as `pickle/model.pkl` and is never modified by the runner.
+- Execution has no time-dependent API calls, random sampling, or network access.
+- Output schema and ordering are versioned in `src/output_adapter.py`.
+- The repository includes an evaluator rehearsal at `product/scripts/rehearse_submission.py`; it is optional and not imported by `run.sh`.
+
+## Troubleshooting
+
+| Symptom | Resolution |
+| --- | --- |
+| `Usage: ./run.sh ...` | Provide exactly `DATA_DIR MODEL_PATH OUTPUT_PATH`. |
+| Python not found | Install Python 3.10+ or set `PYTHON_BIN` to its executable. |
+| Missing schema-compatible source files | Put one complete Google, Microsoft, and Meta CSV in `DATA_DIR`; ensure headers match the input table. |
+| Duplicate source campaign-day records | Deduplicate upstream data by platform, campaign ID, and date. |
+| `Model artifact is not a HorizonModel` | Use the supplied compatible `pickle/model.pkl`. |
+| Output-schema failure | Ensure the pre-trained artifact and repository revision are used together; do not edit forecast output fields. |
+
+## Known Limitations
+
+- The model supports only the three declared source schemas and daily aggregates.
+- It does not adjust for cross-currency conversion, attribution-method changes, promotions, offline conversions, or unobserved market shocks.
+- Forecasts are decision-support estimates, not revenue guarantees.
+- The current output contract is a project-defined schema pending any final evaluator template.
+
+## Future Improvements
+
+- Add official evaluator output fixtures when a final schema is published.
+- Add currency, timezone, attribution, and campaign-hierarchy metadata validation.
+- Add retraining, backtesting, calibration monitoring, and drift detection outside the protected inference path.
+- Add additional media schemas through versioned ingestion and output adapters without changing `run.sh`.

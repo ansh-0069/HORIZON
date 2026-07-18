@@ -7,9 +7,9 @@ import math
 
 import pandas as pd
 
+from product.decisioning.scenario import simulate_budget_plan
 from src.forecast import build_forecast
 from src.model import HorizonModel
-from src.scenario import simulate_budget_plan
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,6 @@ class OptimizationResult:
 
 
 def _marginal_revenue_per_dollar(base_budget: float, base_roas: float, allocated: float) -> float:
-    """Derivative of the same normalized log response used by HorizonModel."""
     baseline = max(base_budget, 1.0)
     scale = max(baseline * 1.5, 1.0)
     normalization = baseline / (scale * math.log1p(baseline / scale))
@@ -39,11 +38,6 @@ def recommend_allocation(
     max_multiple_of_baseline: float = 2.0,
     increments: int = 160,
 ) -> OptimizationResult:
-    """Greedy discrete allocator over concave campaign response curves.
-
-    The solution is deterministic, constrained, and designed for hackathon-scale
-    portfolios. It is validated by the shared forecast function before return.
-    """
     if horizon_days not in {30, 60, 90}:
         raise ValueError("Horizon must be 30, 60, or 90 days")
     if total_budget <= 0:
@@ -114,7 +108,6 @@ def recommend_allocation(
             if current + 1e-6 >= cap or channel_allocated[channel] + 1e-6 >= channel_cap:
                 continue
             marginal = _marginal_revenue_per_dollar(float(row.planned_budget), float(row.predicted_roas_p50), current)
-            # Penalize allocations whose modeled median cannot satisfy the selected ROAS guardrail.
             if target_roas is not None and float(row.predicted_roas_p50) < target_roas:
                 marginal *= 0.55
             candidates.append((marginal, campaign_id, channel, cap, channel_cap))

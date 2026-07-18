@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 import pandas as pd
-from src.direct_model import DirectRidgeModel, fit_direct_ridge, inference_features
+from src.direct_model import DirectRidgeModel, inference_features
 
 
 @dataclass
@@ -15,24 +15,6 @@ class HorizonModel:
     direct_models: dict[int, DirectRidgeModel]
     min_history_days: int = 28
     target_roas: float = 4.0
-
-    @classmethod
-    def fit(cls, canonical: pd.DataFrame, train_direct: bool = True) -> "HorizonModel":
-        valid = canonical[(canonical["spend"] > 0) & (canonical["revenue"] >= 0)].copy()
-        roas = valid["revenue"].sum() / max(valid["spend"].sum(), 1e-9)
-        daily_ratio = (valid["revenue"] / valid["spend"]).clip(lower=1e-5)
-        sigma = float(daily_ratio.map(math.log).std(ddof=0))
-        valid["month"] = valid["date"].dt.month
-        monthly = valid.groupby("month")[["revenue", "spend"]].sum()
-        factors = (monthly["revenue"] / monthly["spend"].clip(lower=1e-9) / roas).clip(0.55, 1.45)
-        direct_models = {horizon: model for horizon in (30, 60, 90) if (model := fit_direct_ridge(canonical, horizon)) is not None} if train_direct else {}
-        return cls(
-            "horizon-direct-ridge-v1" if direct_models else "horizon-statistical-v3",
-            float(roas),
-            max(0.20, min(sigma, 1.25)),
-            {int(month): float(value) for month, value in factors.items()},
-            direct_models,
-        )
 
     def forecast_campaigns(self, canonical: pd.DataFrame, horizon_days: int, budget_overrides: dict[str, float] | None = None) -> pd.DataFrame:
         budget_overrides = budget_overrides or {}

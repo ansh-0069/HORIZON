@@ -12,12 +12,12 @@ from src.canonicalize import canonicalize
 from src.forecast import build_forecast
 from src.ingest import read_source_files
 from src.model import HorizonModel
-from src.optimizer import recommend_allocation
-from src.scenario import simulate_budget_plan
 from src.validate import validate_canonical
-from app.ledger import DecisionLedger
-from app.evidence import EvidenceGenerationError, OpenAIEvidenceClient, build_evidence_packet, evidence_status, load_evidence_config
-from src.evaluate import evaluate_all_horizons
+from product.app.ledger import DecisionLedger
+from product.app.evidence import EvidenceGenerationError, OpenAIEvidenceClient, build_evidence_packet, evidence_status, load_evidence_config
+from product.decisioning.optimizer import recommend_allocation
+from product.decisioning.scenario import simulate_budget_plan
+from product.evaluation import evaluate_all_horizons
 
 
 class PlannerService:

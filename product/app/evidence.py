@@ -17,7 +17,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-ROOT = Path(__file__).resolve().parents[1]
+PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MODEL = "gpt-5.6-luna"
 _NUMERIC_CLAIM = re.compile(r"\d")
@@ -52,7 +52,7 @@ def _read_local_env(path: Path) -> dict[str, str]:
     return values
 
 
-def load_evidence_config(root: Path = ROOT) -> EvidenceClientConfig | None:
+def load_evidence_config(root: Path = PRODUCT_ROOT) -> EvidenceClientConfig | None:
     """Find an API key in the environment or local development env file.
 
     The secret is returned only to the HTTP client and is never included in a
@@ -66,7 +66,7 @@ def load_evidence_config(root: Path = ROOT) -> EvidenceClientConfig | None:
     return EvidenceClientConfig(api_key=api_key, model=model)
 
 
-def evidence_status(root: Path = ROOT) -> dict[str, Any]:
+def evidence_status(root: Path = PRODUCT_ROOT) -> dict[str, Any]:
     config = load_evidence_config(root)
     return {
         "configured": config is not None,

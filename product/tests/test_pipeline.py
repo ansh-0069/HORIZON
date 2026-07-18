@@ -8,28 +8,30 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.evidence import EvidenceGenerationError, build_evidence_packet, validate_brief
-from app.service import PlannerService
+from product.app.evidence import EvidenceGenerationError, build_evidence_packet, validate_brief
+from product.app.service import PlannerService
+from product.decisioning.optimizer import recommend_allocation
+from product.decisioning.scenario import simulate_budget_plan
+from product.training.model_builder import fit_horizon_model
 
 from src.canonicalize import canonicalize
-from src.contracts import FORECAST_COLUMNS
 from src.forecast import build_forecast
 from src.ingest import read_source_files
 from src.model import HorizonModel
-from src.output_adapter import to_submission_schema, validate_submission_schema
-from src.optimizer import recommend_allocation
-from src.scenario import simulate_budget_plan
+from src.output_adapter import FORECAST_COLUMNS, OutputAdapter, OutputField, OutputSchema, SchemaAdaptationError, SchemaValidationError, to_submission_schema, validate_submission_schema, write_predictions_csv
+from src.predict import generate_predictions
 from src.validate import validate_canonical
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+PRODUCT_ROOT = ROOT / "product"
 
 
 class HorizonPipelineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.canonical = canonicalize(read_source_files(ROOT / "data"))
-        cls.model = HorizonModel.fit(cls.canonical)
+        cls.canonical = canonicalize(read_source_files(PRODUCT_ROOT / "demo_data"))
+        cls.model = fit_horizon_model(cls.canonical)
 
     def test_canonicalizes_google_cost_micros(self) -> None:
         google = self.canonical[self.canonical["source_system"] == "google_ads"]
@@ -68,14 +70,55 @@ class HorizonPipelineTests(unittest.TestCase):
             output = to_submission_schema(build_forecast(restored, self.canonical, 30))
         self.assertEqual(list(output.columns), FORECAST_COLUMNS)
         self.assertFalse(output.empty)
+        self.assertFalse(output.isna().any().any())
 
-    def test_submission_contract_validator_rejects_invalid_probability(self) -> None:
+    def test_submission_contract_validator_rejects_schema_violation(self) -> None:
         output = to_submission_schema(pd.concat([build_forecast(self.model, self.canonical, horizon) for horizon in (30, 60, 90)]))
         validate_submission_schema(output)
-        invalid = output.copy()
-        invalid.loc[0, "probability_roas_above_target"] = 1.1
-        with self.assertRaises(ValueError):
+        invalid = output.drop(columns=["risk_score"])
+        with self.assertRaises(SchemaValidationError):
             validate_submission_schema(invalid)
+
+    def test_output_adapter_uses_optional_defaults_and_required_source_errors(self) -> None:
+        forecast = build_forecast(self.model, self.canonical, 30)
+        output = to_submission_schema(forecast.drop(columns=["quality_flags"]))
+        self.assertEqual(set(output["quality_flags"]), {"none"})
+        with self.assertRaises(SchemaAdaptationError):
+            to_submission_schema(forecast.drop(columns=["forecast_id"]))
+
+    def test_output_adapter_supports_a_versioned_compatibility_schema(self) -> None:
+        schema = OutputSchema(
+            version="evaluator-preview-v2",
+            fields=(
+                OutputField("submission_id", ("forecast_id", "legacy_id"), "string"),
+                OutputField("status", (), "string", default="ready"),
+            ),
+            sort_keys=("submission_id",),
+        )
+        adapter = OutputAdapter({schema.version: schema}, default_schema_version=schema.version)
+        output = adapter.adapt(pd.DataFrame({"legacy_id": ["b", "a"]}))
+        self.assertEqual(list(output.columns), ["submission_id", "status"])
+        self.assertEqual(output["submission_id"].tolist(), ["a", "b"])
+        self.assertEqual(output["status"].tolist(), ["ready", "ready"])
+
+    def test_output_adapter_preserves_existing_csv_when_serialization_fails(self) -> None:
+        forecast = build_forecast(self.model, self.canonical, 30)
+        with tempfile.TemporaryDirectory() as temporary:
+            output_path = Path(temporary) / "predictions.csv"
+            output_path.write_text("previous,output\nunchanged,value\n", encoding="utf-8")
+            with patch.object(pd.DataFrame, "to_csv", side_effect=OSError("simulated disk failure")):
+                with self.assertRaisesRegex(OSError, "simulated disk failure"):
+                    write_predictions_csv(forecast, output_path)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "previous,output\nunchanged,value\n")
+            self.assertEqual(list(output_path.parent.glob(".predictions-*.csv")), [])
+
+    def test_prediction_generation_is_atomic_and_missing_model_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "nested" / "predictions.csv"
+            generate_predictions(PRODUCT_ROOT / "demo_data", ROOT / "pickle" / "model.pkl", output)
+            self.assertTrue(output.is_file())
+            with self.assertRaises(FileNotFoundError):
+                generate_predictions(PRODUCT_ROOT / "demo_data", Path(temporary) / "missing.pkl", output)
 
     def test_optimizer_returns_feasible_reconciled_plan(self) -> None:
         baseline = build_forecast(self.model, self.canonical, 30)
@@ -122,7 +165,7 @@ class HorizonPipelineTests(unittest.TestCase):
                 "risks": ["Forecast is conditional."],
             },
         }
-        with patch("app.service.load_evidence_config", return_value=None):
+        with patch("product.app.service.load_evidence_config", return_value=None):
             response = service.explain({"scenario": {"horizon_days": 30}})
         self.assertEqual(response["mode"], "deterministic_fallback")
         self.assertEqual(response["forecast_id"], "test-forecast")

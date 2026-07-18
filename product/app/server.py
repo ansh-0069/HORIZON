@@ -7,16 +7,17 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from app.service import PlannerService
+from product.app.service import PlannerService
 
 
-ROOT = Path(__file__).resolve().parents[1]
+PRODUCT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = PRODUCT_ROOT.parent
 
 
 def make_handler(service: PlannerService):
     class PlannerHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(ROOT / "frontend"), **kwargs)
+            super().__init__(*args, directory=str(PRODUCT_ROOT / "frontend"), **kwargs)
 
         def _json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, allow_nan=False).encode("utf-8")
@@ -81,8 +82,8 @@ def make_handler(service: PlannerService):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run local Horizon planner API and UI")
-    parser.add_argument("--data-dir", type=Path, default=ROOT / "data")
-    parser.add_argument("--model", type=Path, default=ROOT / "pickle" / "model.pkl")
+    parser.add_argument("--data-dir", type=Path, default=PRODUCT_ROOT / "demo_data")
+    parser.add_argument("--model", type=Path, default=PROJECT_ROOT / "pickle" / "model.pkl")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4173)
     args = parser.parse_args()

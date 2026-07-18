@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from typing import Mapping
+
 import pandas as pd
 
 from src.forecast import build_forecast
