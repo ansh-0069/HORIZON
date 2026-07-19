@@ -46,4 +46,6 @@ def validate_canonical(frame: pd.DataFrame) -> QualityReport:
         report.warnings.append(f"missing configured budget rows={null_budget}")
     if frame["quality_flags"].str.contains("unknown|requires_semantic|treated_as_attributed", case=False, na=False).any():
         report.warnings.append("taxonomy or source-attributed revenue semantics require documented review")
+    if frame["quality_flags"].str.contains("source_semantics_unreviewed", case=False, na=False).any():
+        report.warnings.append("source semantics manifest absent: currency, timezone, and attribution comparability are unreviewed")
     return report

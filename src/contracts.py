@@ -33,3 +33,9 @@ SOURCE_REQUIRED_COLUMNS = {
 
 TAXONOMY_FILENAME = "campaign_taxonomy.csv"
 TAXONOMY_REQUIRED_COLUMNS = {"source_system", "source_campaign_id", "campaign_type"}
+
+# Optional review artifact for a planner upload.  The evaluator can continue
+# with the three supplied platform files alone, but a real cross-channel plan
+# must make its money, calendar, and attribution assumptions explicit.
+SEMANTICS_FILENAME = "source_semantics.csv"
+SEMANTICS_REQUIRED_COLUMNS = {"source_system", "currency", "timezone", "attribution_method", "revenue_field"}

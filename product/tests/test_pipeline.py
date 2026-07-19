@@ -21,7 +21,7 @@ from src.forecast import build_forecast
 from src.ingest import read_source_files
 from src.model import HorizonModel
 from src.output_adapter import FORECAST_COLUMNS, OutputAdapter, OutputField, OutputSchema, SchemaAdaptationError, SchemaValidationError, to_submission_schema, validate_submission_schema, write_predictions_csv
-from src.predict import generate_predictions
+from src.predict import generate_predictions, load_model
 from src.validate import validate_canonical
 
 
@@ -150,6 +150,20 @@ class HorizonPipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "metrics_clicks"):
                 read_source_files(data_dir)
 
+    def test_source_semantics_rejects_unresolved_currency_mix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary) / "data"
+            shutil.copytree(ROOT / "data", data_dir)
+            (data_dir / "source_semantics.csv").write_text(
+                "source_system,currency,timezone,attribution_method,revenue_field\n"
+                "google_ads,USD,UTC,platform,metrics_conversions_value\n"
+                "microsoft_ads,INR,UTC,platform,Revenue\n"
+                "meta_ads,USD,UTC,platform,conversion\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "multiple currencies"):
+                read_source_files(data_dir)
+
     def test_forecast_id_binds_data_and_scenario(self) -> None:
         baseline = build_forecast(self.model, self.canonical, 30)
         campaign_key = str(baseline[baseline["level"] == "campaign"].iloc[0]["campaign_key"])
@@ -194,6 +208,28 @@ class HorizonPipelineTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 generate_predictions(PRODUCT_ROOT / "demo_data", Path(temporary) / "missing.pkl", output)
 
+    def test_predictions_are_byte_deterministic_and_runner_caps_blas_threads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            first = Path(temporary) / "first.csv"
+            second = Path(temporary) / "second.csv"
+            generate_predictions(PRODUCT_ROOT / "demo_data", ROOT / "pickle" / "model.pkl", first)
+            generate_predictions(PRODUCT_ROOT / "demo_data", ROOT / "pickle" / "model.pkl", second)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+        runner = (ROOT / "run.sh").read_text(encoding="utf-8")
+        for variable in ("OPENBLAS_NUM_THREADS=1", "OMP_NUM_THREADS=1", "MKL_NUM_THREADS=1"):
+            self.assertIn(variable, runner)
+
+    def test_model_manifest_rejects_tampered_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            model_path = Path(temporary) / "model.pkl"
+            shutil.copy2(ROOT / "pickle" / "model.pkl", model_path)
+            model_path.with_name("model_manifest.json").write_text(
+                '{"artifact_sha256":"not-the-model","model_version":"horizon-direct-ridge-v3-seasonal-plan"}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                load_model(model_path)
+
     def test_optimizer_returns_feasible_reconciled_plan(self) -> None:
         baseline = build_forecast(self.model, self.canonical, 30)
         total = float(baseline[baseline["level"] == "overall"].iloc[0]["planned_budget"])
@@ -202,6 +238,13 @@ class HorizonPipelineTests(unittest.TestCase):
         self.assertEqual(result.status, "feasible")
         self.assertAlmostEqual(sum(result.campaign_budgets.values()), total, places=2)
         self.assertGreater(float(overall["predicted_revenue_p50"]), 0.0)
+        self.assertIn(result.target_constraint_status, {"marginal_target_met", "marginal_target_relaxed"})
+
+    def test_optimizer_declares_when_marginal_target_is_relaxed(self) -> None:
+        baseline = build_forecast(self.model, self.canonical, 30)
+        total = float(baseline[baseline["level"] == "overall"].iloc[0]["planned_budget"])
+        result = recommend_allocation(self.model, self.canonical, 30, total, target_roas=100.0, increments=80)
+        self.assertEqual(result.target_constraint_status, "marginal_target_relaxed")
 
     def test_evidence_brief_is_cited_and_cannot_make_causal_or_numeric_claims(self) -> None:
         forecast = build_forecast(self.model, self.canonical, 30)

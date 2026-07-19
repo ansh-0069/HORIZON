@@ -17,6 +17,9 @@ class OptimizationResult:
     forecast: pd.DataFrame
     campaign_budgets: dict[str, float]
     status: str
+    target_constraint_status: str
+    achieved_roas_p50: float
+    target_roas: float | None
     explanation: str
 
 
@@ -167,14 +170,20 @@ def recommend_allocation(
     if remaining > 1e-4:
         raise ValueError("Scenario infeasible: unable to allocate the full budget")
     forecast = simulate_budget_plan(model, canonical, horizon_days, allocations, target_roas)
+    overall = forecast[forecast["level"] == "overall"].iloc[0]
+    achieved_roas = float(overall["predicted_roas_p50"])
+    target_status = "not_requested" if target_roas is None else ("marginal_target_relaxed" if target_relaxed else "marginal_target_met")
     return OptimizationResult(
         forecast=forecast,
         campaign_budgets=allocations,
         status="feasible",
+        target_constraint_status=target_status,
+        achieved_roas_p50=achieved_roas,
+        target_roas=target_roas,
         explanation=(
             "Allocation uses discrete marginal returns from the same direct-ridge response used by scenario forecasts "
             "when available, with a documented fallback curve, campaign support caps, channel constraints, and a "
-            f"{'controlled ROAS-target relaxation because no fully feasible allocation met the guardrail' if target_relaxed else 'hard ROAS guardrail while feasible'}. "
+            f"{'controlled marginal-ROAS target relaxation because no fully feasible allocation met the guardrail' if target_relaxed else 'hard marginal-ROAS guardrail while feasible'}. "
             "The selected allocation is reforecast through the shared probabilistic model."
         ),
     )

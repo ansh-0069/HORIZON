@@ -30,10 +30,21 @@ def load_model(path: Path) -> HorizonModel:
     if not path.is_file():
         raise FileNotFoundError(f"Model file does not exist: {path}")
     artifact = path.read_bytes()
+    artifact_sha256 = hashlib.sha256(artifact).hexdigest()
+    manifest_path = path.with_name("model_manifest.json")
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Model manifest is unreadable: {manifest_path}") from exc
+        if manifest.get("artifact_sha256") != artifact_sha256:
+            raise ValueError("Model artifact SHA-256 does not match model_manifest.json")
     model = pickle.loads(artifact)
     if not isinstance(model, HorizonModel):
         raise TypeError("Model artifact is not a HorizonModel")
-    return replace(model, artifact_sha256=hashlib.sha256(artifact).hexdigest())
+    if manifest_path.is_file() and manifest.get("model_version") != model.model_version:
+        raise ValueError("Model artifact version does not match model_manifest.json")
+    return replace(model, artifact_sha256=artifact_sha256)
 
 
 def _log(event: str, **fields: object) -> None:

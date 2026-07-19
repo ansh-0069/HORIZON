@@ -2,6 +2,7 @@ const money = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'
 const number = new Intl.NumberFormat('en-US', {maximumFractionDigits: 2});
 let baselineBudgets = {};
 let latestScenario = {horizon_days: 60, target_roas: 4.0};
+let baselineOverall = null;
 
 const byId = (id) => document.getElementById(id);
 const setNotice = (text, kind='ok') => { const node = byId('notice'); node.textContent = text; node.className = `notice ${kind}`; };
@@ -44,7 +45,26 @@ function renderAllocation(optimization) {
     return;
   }
   const entries = Object.entries(optimization.campaign_budgets || {}).sort(([, left], [, right]) => Number(right) - Number(left)).slice(0, 8);
-  container.innerHTML = `<p class="allocation-status"><strong>${escapeHtml(optimization.status)}</strong> — ${escapeHtml(optimization.explanation)}</p><ol class="allocation-list">${entries.map(([campaign, budget]) => `<li><span>${escapeHtml(campaign)}</span><strong>${formatMoney(budget)}</strong></li>`).join('')}</ol>`;
+  const target = optimization.target_roas;
+  const achieved = optimization.achieved_roas_p50;
+  const relaxed = optimization.target_constraint_status === 'marginal_target_relaxed';
+  const targetLine = target == null ? 'No ROAS guardrail was requested.' : `Target ${number.format(target)}; blended P50 ROAS ${number.format(achieved)} (${number.format(optimization.target_gap_p50)} gap).`;
+  container.innerHTML = `<p class="allocation-status"><strong>${escapeHtml(optimization.status)}</strong> <span class="badge ${relaxed ? 'warn' : ''}">${escapeHtml((optimization.target_constraint_status || 'not_requested').replaceAll('_', ' '))}</span><br>${escapeHtml(targetLine)}<br>${escapeHtml(optimization.explanation)}</p><ol class="allocation-list">${entries.map(([campaign, budget]) => `<li><span>${escapeHtml(campaign)}</span><strong>${formatMoney(budget)}</strong></li>`).join('')}</ol>`;
+}
+
+function renderUncertainty(overall, initializing) {
+  if (initializing) baselineOverall = {...overall};
+  const baseline = baselineOverall || overall;
+  const rows = [{label: 'Baseline', value: baseline}, {label: 'Current scenario', value: overall}];
+  const width = 760;
+  const maximum = Math.max(...rows.map(({value}) => Number(value.predicted_revenue_p90 || 0)), 1);
+  const x = (value) => 34 + Math.max(0, Number(value || 0)) / maximum * (width - 54);
+  const line = ({label, value}, index) => {
+    const y = 42 + index * 66;
+    const p10 = x(value.predicted_revenue_p10), p50 = x(value.predicted_revenue_p50), p90 = x(value.predicted_revenue_p90);
+    return `<text x="0" y="${y + 4}" class="chart-label">${label}</text><line x1="${p10}" x2="${p90}" y1="${y}" y2="${y}" class="chart-range"/><line x1="${p10}" x2="${p10}" y1="${y - 7}" y2="${y + 7}" class="chart-cap"/><line x1="${p90}" x2="${p90}" y1="${y - 7}" y2="${y + 7}" class="chart-cap"/><circle cx="${p50}" cy="${y}" r="6" class="chart-median"/><text x="${Math.min(p50 + 10, width - 84)}" y="${y + 4}" class="chart-value">${formatMoney(value.predicted_revenue_p50)}</text>`;
+  };
+  byId('uncertainty-chart').innerHTML = `<svg viewBox="0 0 ${width} 126" role="img" aria-label="Revenue uncertainty ranges for baseline and current scenario">${rows.map(line).join('')}<text x="34" y="120" class="chart-note">Range = P10–P90; dot = P50. This is a conditional forecast, not a guarantee.</text></svg>`;
 }
 
 function renderEvidence(evidence) {
@@ -72,7 +92,7 @@ function render(response, initializing=false) {
   byId('probability').textContent = `${Math.round(overall.probability_roas_above_target * 100)}%`;
   byId('risk').textContent = `Risk score: ${number.format(overall.risk_score)} / 100`;
   byId('decision').textContent = response.evidence.decision.replaceAll('_', ' ');
-  renderChannels(response.channels); renderCampaignTypes(response.campaign_types); renderCampaigns(response.campaigns); renderAllocation(response.optimization); renderEvidence(response.evidence); renderHealth(response.data_health);
+  renderChannels(response.channels); renderCampaignTypes(response.campaign_types); renderCampaigns(response.campaigns); renderAllocation(response.optimization); renderEvidence(response.evidence); renderHealth(response.data_health); renderUncertainty(overall, initializing);
   if (initializing) {
     baselineBudgets = Object.fromEntries(response.channels.map((row) => [row.channel, row.planned_budget]));
     byId('google').value = Math.round(baselineBudgets.SEARCH + (baselineBudgets.SHOPPING || 0) + (baselineBudgets.PERFORMANCE_MAX || 0) + (baselineBudgets.DEMAND_GEN || 0) + (baselineBudgets.DISPLAY || 0) + (baselineBudgets.VIDEO || 0));

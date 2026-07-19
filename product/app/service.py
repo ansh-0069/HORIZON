@@ -152,7 +152,15 @@ class PlannerService:
             "channels": self._records(forecast[forecast["level"] == "channel"].sort_values("predicted_revenue_p50", ascending=False)),
             "campaign_types": self._records(forecast[forecast["level"] == "campaign_type"].sort_values("predicted_revenue_p50", ascending=False)),
             "campaigns": self._records(forecast[forecast["level"] == "campaign"].sort_values("predicted_revenue_p50", ascending=False)),
-            "optimization": {"status": result.status, "campaign_budgets": result.campaign_budgets, "explanation": result.explanation},
+            "optimization": {
+                "status": result.status,
+                "campaign_budgets": result.campaign_budgets,
+                "target_constraint_status": result.target_constraint_status,
+                "target_roas": result.target_roas,
+                "achieved_roas_p50": result.achieved_roas_p50,
+                "target_gap_p50": None if result.target_roas is None else result.achieved_roas_p50 - result.target_roas,
+                "explanation": result.explanation,
+            },
         }
         return response
 

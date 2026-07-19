@@ -6,6 +6,8 @@ import pandas as pd
 from src.contracts import (
     SOURCE_IDENTITY_COLUMNS,
     SOURCE_REQUIRED_COLUMNS,
+    SEMANTICS_FILENAME,
+    SEMANTICS_REQUIRED_COLUMNS,
     TAXONOMY_FILENAME,
     TAXONOMY_REQUIRED_COLUMNS,
 )
@@ -54,4 +56,27 @@ def read_source_files(data_dir: Path) -> dict[str, pd.DataFrame]:
         if duplicate_keys.any():
             raise ValueError(f"{TAXONOMY_FILENAME} has duplicate source/campaign mappings: {int(duplicate_keys.sum())}")
         sources["campaign_taxonomy"] = taxonomy
+    semantics_path = data_dir / SEMANTICS_FILENAME
+    if semantics_path.is_file():
+        try:
+            semantics = pd.read_csv(semantics_path)
+        except Exception as exc:
+            raise ValueError(f"Unable to read optional semantics file {SEMANTICS_FILENAME}: {exc}") from exc
+        missing = sorted(SEMANTICS_REQUIRED_COLUMNS - set(semantics.columns))
+        if missing:
+            raise ValueError(f"{SEMANTICS_FILENAME} is missing required columns: {missing}")
+        if semantics["source_system"].duplicated().any():
+            raise ValueError(f"{SEMANTICS_FILENAME} has duplicate source_system rows")
+        expected_sources = set(SOURCE_IDENTITY_COLUMNS)
+        actual_sources = set(semantics["source_system"].astype(str))
+        if actual_sources != expected_sources:
+            raise ValueError(f"{SEMANTICS_FILENAME} must declare exactly {sorted(expected_sources)}")
+        for column in ("currency", "timezone", "attribution_method", "revenue_field"):
+            if semantics[column].isna().any() or semantics[column].astype(str).str.strip().eq("").any():
+                raise ValueError(f"{SEMANTICS_FILENAME} contains blank {column} values")
+        if semantics["currency"].astype(str).str.upper().nunique() != 1:
+            raise ValueError(f"{SEMANTICS_FILENAME} contains multiple currencies; normalize before forecasting")
+        if semantics["timezone"].astype(str).nunique() != 1:
+            raise ValueError(f"{SEMANTICS_FILENAME} contains multiple timezones; align daily boundaries before forecasting")
+        sources["source_semantics"] = semantics
     return sources

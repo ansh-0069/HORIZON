@@ -1,0 +1,6 @@
+{
+  "artifact_sha256": "6f36061b4dbbe2703d53547aa16ef86dec837815366ccdfc731bca437efbea10",
+  "model_version": "horizon-direct-ridge-v3-seasonal-plan",
+  "python_major_minor": "3.11",
+  "purpose": "Trusted, pre-trained offline inference artifact for the protected hackathon path."
+}

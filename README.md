@@ -59,6 +59,10 @@ The prediction command itself never installs packages and never accesses a netwo
 serial linear-algebra operations; this prevents thread-pool overhead and keeps
 runtime deterministic on shared evaluator machines.
 
+When `pickle/model_manifest.json` is present, the runner verifies the model
+artifact SHA-256 and version before unpickling it. This is an integrity check
+for the committed trusted artifact; it does not download or execute anything.
+
 From the repository root (with the committed sample files in `./data`):
 
 ```bash
@@ -175,6 +179,10 @@ python -m product.scripts.release_check --strict --require-upstream-sync
 ## Known Limitations
 
 - The model supports only the three declared source schemas and daily aggregates.
+- An optional `source_semantics.csv` can declare one normalized currency,
+  timezone, attribution method, and revenue-field definition for all sources.
+  Without it, the runner emits a review warning rather than fabricating those
+  assumptions from incomplete platform exports.
 - It does not adjust for cross-currency conversion, attribution-method changes, promotions, offline conversions, or unobserved market shocks.
 - Forecasts are decision-support estimates, not revenue guarantees.
 - The current output contract is a project-defined schema pending any final evaluator template.

@@ -38,6 +38,11 @@ def _taxonomy_mapping(raw: dict[str, pd.DataFrame]) -> dict[tuple[str, str], str
     }
 
 
+def _semantics_reviewed(raw: dict[str, pd.DataFrame]) -> bool:
+    """Return whether this input carried a validated source-semantics manifest."""
+    return "source_semantics" in raw
+
+
 def _to_numeric(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     for column in columns:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
@@ -46,6 +51,8 @@ def _to_numeric(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
 def canonicalize(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
     taxonomy = _taxonomy_mapping(raw)
+    reviewed_semantics = _semantics_reviewed(raw)
+    semantics_flag = "source_semantics_reviewed" if reviewed_semantics else "source_semantics_unreviewed"
     google = raw["google_ads"].copy()
     google = _to_numeric(google, ["metrics_cost_micros", "metrics_conversions_value", "metrics_clicks", "metrics_impressions", "metrics_conversions", "campaign_budget_amount"])
     g = pd.DataFrame({
@@ -61,7 +68,7 @@ def canonicalize(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
         "impressions": google["metrics_impressions"],
         "conversions": google["metrics_conversions"],
         "configured_budget": google["campaign_budget_amount"],
-        "quality_flags": "google_cost_micros_normalized",
+        "quality_flags": f"google_cost_micros_normalized;{semantics_flag}",
     })
 
     bing = raw["microsoft_ads"].copy()
@@ -75,7 +82,7 @@ def canonicalize(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
         "campaign_name": bing["CampaignName"].fillna(bing["CampaignId"].astype(str)).astype(str),
         "spend": bing["Spend"], "revenue": bing["Revenue"], "clicks": bing["Clicks"],
         "impressions": bing["Impressions"], "conversions": bing["Conversions"],
-        "configured_budget": bing["DailyBudget"], "quality_flags": "",
+        "configured_budget": bing["DailyBudget"], "quality_flags": semantics_flag,
     })
 
     meta = raw["meta_ads"].copy()
@@ -95,7 +102,7 @@ def canonicalize(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
         "spend": meta["spend"], "revenue": meta["conversion"], "clicks": meta["clicks"],
         "impressions": meta["impressions"], "conversions": meta["conversion"],
         "configured_budget": meta["daily_budget"],
-        "quality_flags": meta_quality_flags.map(lambda value: f"{value};meta_conversion_treated_as_attributed_revenue"),
+        "quality_flags": meta_quality_flags.map(lambda value: f"{value};meta_conversion_treated_as_attributed_revenue;{semantics_flag}"),
     })
     output = pd.concat([g, b, m], ignore_index=True)[CANONICAL_COLUMNS]
     output["spend"] = output["spend"].astype(float)
