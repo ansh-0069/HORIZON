@@ -9,10 +9,17 @@ from __future__ import annotations
 import argparse
 import csv
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+# Support both documented module execution and direct execution from an
+# arbitrary working directory.  The verifier is outside the protected runner,
+# but release tooling should not rely on an implicit PYTHONPATH.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.output_adapter import FORECAST_COLUMNS
 
-ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOCKED_HEADER = ROOT / "product" / "tests" / "fixtures" / "horizon_v1_header.csv"
 
 

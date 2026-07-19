@@ -1,167 +1,691 @@
 {
-  "model_family": "horizon-direct-ridge-v3-seasonal-plan",
-  "baseline_model_family": "horizon-statistical-v5-seasonal-plan",
-  "data_fingerprint": "f9baaf3001af382761b41524a60de6b2c6b71424eff76209e4ddad74dc8f830b",
+  "report_schema_version": "horizon-evaluation-v2",
+  "evaluation_protocol": {
+    "name": "rolling_origin_prequential_backtest_v2",
+    "default_folds": 6,
+    "requested_folds": 6,
+    "step_days": 30,
+    "horizons_days": [
+      30,
+      60,
+      90
+    ],
+    "candidate_training": "Each fold uses only canonical rows at or before its forecast origin.",
+    "interval_calibration": "Direct-model residual quantiles use a purged later temporal holdout; no in-sample fallback is accepted.",
+    "artifact_scope": "This report evaluates fold-specific retraining, not an in-place mutation of the protected evaluator artifact."
+  },
+  "data_fingerprint": "e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4",
+  "data_provenance": {
+    "canonical_fingerprint": "e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4",
+    "canonical_rows": 25562,
+    "canonical_date_start": "2024-01-01",
+    "canonical_date_end": "2026-06-05",
+    "campaign_count": 136,
+    "source_systems": [
+      "google_ads",
+      "meta_ads",
+      "microsoft_ads"
+    ]
+  },
+  "model_family": "horizon-direct-ridge-v5-oof-factor-copula",
+  "model_versions_observed": [
+    "horizon-direct-ridge-v5-oof-factor-copula"
+  ],
+  "baseline_model_family": "horizon-statistical-v7-factor-copula",
+  "baseline_model_versions_observed": [
+    "horizon-statistical-v7-factor-copula"
+  ],
   "horizons": [
     {
       "horizon_days": 30,
-      "folds": 3,
-      "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
+      "revenue_interval_coverage": 0.6667,
+      "revenue_interval_coverage_95_ci": [
+        0.3,
+        0.9032
+      ],
+      "roas_interval_coverage": 0.8333,
+      "roas_interval_coverage_95_ci": [
+        0.4365,
+        0.9699
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.277,
-      "uncertainty_method": "temporal_holdout_residual_quantiles",
-      "median_calibration_samples": 141,
+      "revenue_wape": 0.6304,
+      "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+      "median_calibration_samples": 139,
+      "model_versions_observed": [
+        "horizon-direct-ridge-v5-oof-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "98b39b3be576d4539790bfdfbdb587b244d5ed7b60b9972fbbfcf84466bbe0ec",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63"
+      ],
+      "feature_schema_fingerprints": [
+        "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 0.6667,
+          "revenue_interval_coverage_95_ci": [
+            0.3,
+            0.9032
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.8333,
+          "roas_interval_coverage_95_ci": [
+            0.4365,
+            0.9699
+          ]
+        },
+        "channel": {
+          "observations": 36,
+          "matched_observations": 34,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 34,
+          "revenue_interval_coverage": 0.5588,
+          "revenue_interval_coverage_95_ci": [
+            0.3945,
+            0.7112
+          ],
+          "roas_coverage_observations": 34,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.4118,
+          "roas_interval_coverage_95_ci": [
+            0.2637,
+            0.5778
+          ]
+        },
+        "campaign_type": {
+          "observations": 66,
+          "matched_observations": 56,
+          "missing_forecast_observations": 4,
+          "missing_actual_observations": 6,
+          "revenue_coverage_observations": 60,
+          "revenue_interval_coverage": 0.4667,
+          "revenue_interval_coverage_95_ci": [
+            0.3463,
+            0.5911
+          ],
+          "roas_coverage_observations": 60,
+          "roas_unscorable_observations": 6,
+          "roas_interval_coverage": 0.3667,
+          "roas_interval_coverage_95_ci": [
+            0.2562,
+            0.4932
+          ]
+        },
+        "campaign": {
+          "observations": 328,
+          "matched_observations": 240,
+          "missing_forecast_observations": 46,
+          "missing_actual_observations": 42,
+          "revenue_coverage_observations": 286,
+          "revenue_interval_coverage": 0.465,
+          "revenue_interval_coverage_95_ci": [
+            0.4081,
+            0.5229
+          ],
+          "roas_coverage_observations": 279,
+          "roas_unscorable_observations": 49,
+          "roas_interval_coverage": 0.3441,
+          "roas_interval_coverage_95_ci": [
+            0.2908,
+            0.4016
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1330620.836101853,
+          "actual_spend": 216048.992546,
+          "actual_roas": 6.15888470675717,
+          "predicted_revenue_p10": 755433.0501555613,
+          "predicted_revenue_p50": 1818200.4459011517,
+          "predicted_revenue_p90": 2263371.043546008,
+          "predicted_roas_p10": 3.07910620563025,
+          "predicted_roas_p50": 4.677155166175557,
+          "predicted_roas_p90": 4.677155166175557,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 122,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
+        },
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 172013.82523352402,
+          "actual_spend": 31238.678925999997,
+          "actual_roas": 5.506437248546918,
+          "predicted_revenue_p10": 547194.9273588421,
+          "predicted_revenue_p50": 1257189.8962266722,
+          "predicted_revenue_p90": 1626129.1884312397,
+          "predicted_roas_p10": 4.150337979453769,
+          "predicted_roas_p50": 6.041408450990872,
+          "predicted_roas_p90": 6.207373651673112,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 135,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
+        },
+        {
+          "cutoff": "2026-02-05",
+          "actual_revenue": 352273.82280797,
+          "actual_spend": 66752.597414,
+          "actual_roas": 5.277305100551604,
+          "predicted_revenue_p10": 162057.0194703047,
+          "predicted_revenue_p50": 330164.98273430415,
+          "predicted_revenue_p90": 473792.52048227383,
+          "predicted_roas_p10": 4.572284616864301,
+          "predicted_roas_p50": 7.433256544108071,
+          "predicted_roas_p90": 9.460212640609853,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 148,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
+        },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 350133.26806964003,
           "actual_spend": 48443.997567,
           "actual_roas": 7.2275882597300445,
-          "predicted_revenue_p10": 193302.47142436798,
-          "predicted_revenue_p50": 537461.1437569003,
-          "predicted_revenue_p90": 1241464.5674988995,
-          "predicted_roas_p10": 2.7680998191304744,
-          "predicted_roas_p50": 6.92682031157946,
-          "predicted_roas_p90": 15.23813720285148,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 146
+          "predicted_revenue_p10": 220521.69436033888,
+          "predicted_revenue_p50": 417353.97215519135,
+          "predicted_revenue_p90": 639476.0237155678,
+          "predicted_roas_p10": 3.8592274579861714,
+          "predicted_roas_p50": 5.811167169206489,
+          "predicted_roas_p90": 7.2909704938749735,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 146,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
         },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 376339.35690114903,
           "actual_spend": 68180.310644,
           "actual_roas": 5.519765946303556,
-          "predicted_revenue_p10": 75166.09330413447,
-          "predicted_revenue_p50": 302498.6054483547,
-          "predicted_revenue_p90": 487310.97971401626,
-          "predicted_roas_p10": 1.730822901687942,
-          "predicted_roas_p50": 6.268975038095941,
-          "predicted_roas_p90": 9.618117123105412,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 138
+          "predicted_revenue_p10": 120585.3005783293,
+          "predicted_revenue_p50": 235326.03475338916,
+          "predicted_revenue_p90": 360649.3336061875,
+          "predicted_roas_p10": 3.2573563729379424,
+          "predicted_roas_p50": 5.041881065503377,
+          "predicted_roas_p90": 6.302026653220696,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 138,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
         },
         {
           "cutoff": "2026-05-06",
           "actual_revenue": 342801.16772662,
           "actual_spend": 68260.164856,
           "actual_roas": 5.021979780590701,
-          "predicted_revenue_p10": 101681.80558893984,
-          "predicted_revenue_p50": 377819.28327763063,
-          "predicted_revenue_p90": 601155.6491221249,
-          "predicted_roas_p10": 1.5664221204996862,
-          "predicted_roas_p50": 5.2383219544993285,
-          "predicted_roas_p90": 7.937901415899251,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 141
+          "predicted_revenue_p10": 163416.38947633002,
+          "predicted_revenue_p50": 302365.86942002544,
+          "predicted_revenue_p90": 481505.17685113335,
+          "predicted_roas_p10": 3.139314305047475,
+          "predicted_roas_p50": 4.326266085550136,
+          "predicted_roas_p90": 5.42590874845091,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 141,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "98b39b3be576d4539790bfdfbdb587b244d5ed7b60b9972fbbfcf84466bbe0ec",
+          "feature_schema_fingerprint": "800e765570294141be5ea8434343db14b49b2c4fbfcbbdd227077b32a6706807"
         }
       ]
     },
     {
       "horizon_days": 60,
-      "folds": 3,
-      "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
+      "revenue_interval_coverage": 0.3333,
+      "revenue_interval_coverage_95_ci": [
+        0.0968,
+        0.7
+      ],
+      "roas_interval_coverage": 0.5,
+      "roas_interval_coverage_95_ci": [
+        0.1876,
+        0.8124
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.2217,
-      "uncertainty_method": "temporal_holdout_residual_quantiles",
-      "median_calibration_samples": 129,
+      "revenue_wape": 1.0367,
+      "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+      "median_calibration_samples": 122,
+      "model_versions_observed": [
+        "horizon-direct-ridge-v5-oof-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63"
+      ],
+      "feature_schema_fingerprints": [
+        "9b3185b2577b1db3ff30a7379c0e04177ec6399ca6a61692aad54261808d4e31",
+        "cd5089f89cfe4d374745c2fe49962b56b64cdf774ccac04874ccebe8224c41bf",
+        "efe5e2f2bf9b3bb60a0eddf8f50634a578389862bc7ca4c34245dd4846c12441"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 0.3333,
+          "revenue_interval_coverage_95_ci": [
+            0.0968,
+            0.7
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.5,
+          "roas_interval_coverage_95_ci": [
+            0.1876,
+            0.8124
+          ]
+        },
+        "channel": {
+          "observations": 38,
+          "matched_observations": 36,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 36,
+          "revenue_interval_coverage": 0.3611,
+          "revenue_interval_coverage_95_ci": [
+            0.2248,
+            0.5243
+          ],
+          "roas_coverage_observations": 36,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.2778,
+          "roas_interval_coverage_95_ci": [
+            0.1585,
+            0.4399
+          ]
+        },
+        "campaign_type": {
+          "observations": 72,
+          "matched_observations": 59,
+          "missing_forecast_observations": 7,
+          "missing_actual_observations": 6,
+          "revenue_coverage_observations": 66,
+          "revenue_interval_coverage": 0.2879,
+          "revenue_interval_coverage_95_ci": [
+            0.1927,
+            0.4064
+          ],
+          "roas_coverage_observations": 66,
+          "roas_unscorable_observations": 6,
+          "roas_interval_coverage": 0.2121,
+          "roas_interval_coverage_95_ci": [
+            0.1308,
+            0.3251
+          ]
+        },
+        "campaign": {
+          "observations": 375,
+          "matched_observations": 254,
+          "missing_forecast_observations": 82,
+          "missing_actual_observations": 39,
+          "revenue_coverage_observations": 336,
+          "revenue_interval_coverage": 0.253,
+          "revenue_interval_coverage_95_ci": [
+            0.2095,
+            0.3021
+          ],
+          "roas_coverage_observations": 330,
+          "roas_unscorable_observations": 45,
+          "roas_interval_coverage": 0.2212,
+          "roas_interval_coverage_95_ci": [
+            0.1798,
+            0.2691
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-11-07",
+          "actual_revenue": 2558711.27399744,
+          "actual_spend": 550550.899628,
+          "actual_roas": 4.647547167257973,
+          "predicted_revenue_p10": 566409.8618084191,
+          "predicted_revenue_p50": 800005.4331853479,
+          "predicted_revenue_p90": 1243435.1054806905,
+          "predicted_roas_p10": 5.642573586508283,
+          "predicted_roas_p50": 6.8149460187399615,
+          "predicted_roas_p90": 9.22753138991777,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 91,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+          "feature_schema_fingerprint": "9b3185b2577b1db3ff30a7379c0e04177ec6399ca6a61692aad54261808d4e31"
+        },
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1502634.661335377,
+          "actual_spend": 247287.671472,
+          "actual_roas": 6.076464113195866,
+          "predicted_revenue_p10": 2980912.6329628853,
+          "predicted_revenue_p50": 4395935.413330727,
+          "predicted_revenue_p90": 6792241.022033296,
+          "predicted_roas_p10": 5.246618437239779,
+          "predicted_roas_p50": 5.587528832380985,
+          "predicted_roas_p90": 6.267497332821319,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 106,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "efe5e2f2bf9b3bb60a0eddf8f50634a578389862bc7ca4c34245dd4846c12441"
+        },
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 524287.648041494,
+          "actual_spend": 97991.27634,
+          "actual_roas": 5.3503502314060585,
+          "predicted_revenue_p10": 1481989.7989843164,
+          "predicted_revenue_p50": 2312015.594513269,
+          "predicted_revenue_p90": 3584172.5172141553,
+          "predicted_roas_p10": 5.017561556235592,
+          "predicted_roas_p50": 5.56048010468699,
+          "predicted_roas_p90": 6.532484462046076,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 121,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "cd5089f89cfe4d374745c2fe49962b56b64cdf774ccac04874ccebe8224c41bf"
+        },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 702407.09087761,
           "actual_spend": 115196.594981,
           "actual_roas": 6.097464000506801,
-          "predicted_revenue_p10": 248266.30842587657,
-          "predicted_revenue_p50": 774826.5570090443,
-          "predicted_revenue_p90": 1022908.4238110278,
-          "predicted_roas_p10": 2.9035075719379893,
-          "predicted_roas_p50": 8.15552988454524,
-          "predicted_roas_p90": 10.254043177951441,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 129
+          "predicted_revenue_p10": 378964.2950461334,
+          "predicted_revenue_p50": 565589.7222611171,
+          "predicted_revenue_p90": 879703.2320990086,
+          "predicted_roas_p10": 5.727214135527466,
+          "predicted_roas_p50": 6.396646982417548,
+          "predicted_roas_p90": 7.6237068291789445,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 129,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "cd5089f89cfe4d374745c2fe49962b56b64cdf774ccac04874ccebe8224c41bf"
         },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 726472.6249707891,
           "actual_spend": 116624.30821100001,
           "actual_roas": 6.229169854164829,
-          "predicted_revenue_p10": 400899.2441724297,
-          "predicted_revenue_p50": 963391.6991367993,
-          "predicted_revenue_p90": 1468119.4554581605,
-          "predicted_roas_p10": 2.870447328236675,
-          "predicted_roas_p50": 6.208115011758144,
-          "predicted_roas_p90": 9.010086263483666,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 129
+          "predicted_revenue_p10": 490455.03408871876,
+          "predicted_revenue_p50": 673101.2300418257,
+          "predicted_revenue_p90": 1048876.5067223131,
+          "predicted_roas_p10": 4.442805507814954,
+          "predicted_roas_p50": 4.609257940052924,
+          "predicted_roas_p90": 5.524028805491031,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 129,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "cd5089f89cfe4d374745c2fe49962b56b64cdf774ccac04874ccebe8224c41bf"
         },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 719140.524627769,
           "actual_spend": 136440.4755,
           "actual_roas": 5.270727194349077,
-          "predicted_revenue_p10": 192886.47680477236,
-          "predicted_revenue_p50": 552370.2770617247,
-          "predicted_revenue_p90": 825367.5499617762,
-          "predicted_roas_p10": 2.2207641557795093,
-          "predicted_roas_p50": 5.7236552769452205,
-          "predicted_roas_p90": 8.145190746370734,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 124
+          "predicted_revenue_p10": 252312.10329863537,
+          "predicted_revenue_p50": 368036.24036296183,
+          "predicted_revenue_p90": 584220.6623820651,
+          "predicted_roas_p10": 3.6433501011265186,
+          "predicted_roas_p50": 3.8892518072912456,
+          "predicted_roas_p90": 4.633413984159361,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 124,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+          "feature_schema_fingerprint": "cd5089f89cfe4d374745c2fe49962b56b64cdf774ccac04874ccebe8224c41bf"
         }
       ]
     },
     {
       "horizon_days": 90,
-      "folds": 3,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
       "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "revenue_interval_coverage_95_ci": [
+        0.6097,
+        1.0
+      ],
+      "roas_interval_coverage": 0.6667,
+      "roas_interval_coverage_95_ci": [
+        0.3,
+        0.9032
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.174,
-      "uncertainty_method": "temporal_holdout_residual_quantiles",
-      "median_calibration_samples": 113,
+      "revenue_wape": 0.3082,
+      "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+      "median_calibration_samples": 99,
+      "model_versions_observed": [
+        "horizon-direct-ridge-v5-oof-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+        "fd593a25e36aef9041f0a83a2638bb655e7223e3fc0786b22ef75fc3f24edfad"
+      ],
+      "feature_schema_fingerprints": [
+        "021a04f6e20be0102f155f27429765054fd5c57855466a3cc087c1a45d0d8757",
+        "025006b90e49a04c6faa754095548dcc4fbdb99dd03f615a074f9e2882f63d6e",
+        "63e77504b086d21f28076cf8bbe758548c9ef1571ffa44be97d4b855cd71deb1",
+        "bd3c2eba251b75d4a7219517b9d93916b189be26753610a28fc0c2b708a51c9f"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 1.0,
+          "revenue_interval_coverage_95_ci": [
+            0.6097,
+            1.0
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.6667,
+          "roas_interval_coverage_95_ci": [
+            0.3,
+            0.9032
+          ]
+        },
+        "channel": {
+          "observations": 40,
+          "matched_observations": 38,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 38,
+          "revenue_interval_coverage": 0.3947,
+          "revenue_interval_coverage_95_ci": [
+            0.256,
+            0.5528
+          ],
+          "roas_coverage_observations": 38,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.5,
+          "roas_interval_coverage_95_ci": [
+            0.3485,
+            0.6515
+          ]
+        },
+        "campaign_type": {
+          "observations": 77,
+          "matched_observations": 62,
+          "missing_forecast_observations": 10,
+          "missing_actual_observations": 5,
+          "revenue_coverage_observations": 72,
+          "revenue_interval_coverage": 0.2778,
+          "revenue_interval_coverage_95_ci": [
+            0.1876,
+            0.3905
+          ],
+          "roas_coverage_observations": 72,
+          "roas_unscorable_observations": 5,
+          "roas_interval_coverage": 0.3472,
+          "roas_interval_coverage_95_ci": [
+            0.2475,
+            0.4624
+          ]
+        },
+        "campaign": {
+          "observations": 404,
+          "matched_observations": 264,
+          "missing_forecast_observations": 119,
+          "missing_actual_observations": 21,
+          "revenue_coverage_observations": 383,
+          "revenue_interval_coverage": 0.2324,
+          "revenue_interval_coverage_95_ci": [
+            0.1929,
+            0.2772
+          ],
+          "roas_coverage_observations": 377,
+          "roas_unscorable_observations": 27,
+          "roas_interval_coverage": 0.2891,
+          "roas_interval_coverage_95_ci": [
+            0.2457,
+            0.3368
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-10-08",
+          "actual_revenue": 2755600.973445665,
+          "actual_spend": 605413.8588690001,
+          "actual_roas": 4.551598766822951,
+          "predicted_revenue_p10": 989983.4865585755,
+          "predicted_revenue_p50": 1409914.9516871208,
+          "predicted_revenue_p90": 3154021.2841611495,
+          "predicted_roas_p10": 3.735673786335633,
+          "predicted_roas_p50": 4.591662713842498,
+          "predicted_roas_p90": 8.382460960040863,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 69,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "fd593a25e36aef9041f0a83a2638bb655e7223e3fc0786b22ef75fc3f24edfad",
+          "feature_schema_fingerprint": "bd3c2eba251b75d4a7219517b9d93916b189be26753610a28fc0c2b708a51c9f"
+        },
+        {
+          "cutoff": "2025-11-07",
+          "actual_revenue": 2730725.099230964,
+          "actual_spend": 581789.578554,
+          "actual_roas": 4.69366451358239,
+          "predicted_revenue_p10": 1243292.6045264506,
+          "predicted_revenue_p50": 1717208.7943268549,
+          "predicted_revenue_p90": 3769367.161568373,
+          "predicted_roas_p10": 4.150465399566297,
+          "predicted_roas_p50": 4.8920855448167915,
+          "predicted_roas_p90": 8.619690011758344,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 79,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+          "feature_schema_fingerprint": "bd3c2eba251b75d4a7219517b9d93916b189be26753610a28fc0c2b708a51c9f"
+        },
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1854908.4841433468,
+          "actual_spend": 314040.268886,
+          "actual_roas": 5.90659436996183,
+          "predicted_revenue_p10": 1262724.3512009312,
+          "predicted_revenue_p50": 1728701.681722283,
+          "predicted_revenue_p90": 3738657.369136931,
+          "predicted_roas_p10": 4.036370936865108,
+          "predicted_roas_p50": 4.668104015854092,
+          "predicted_roas_p90": 8.102820588403231,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 94,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "021a04f6e20be0102f155f27429765054fd5c57855466a3cc087c1a45d0d8757"
+        },
         {
           "cutoff": "2026-01-06",
           "actual_revenue": 874420.916111134,
           "actual_spend": 146435.273907,
           "actual_roas": 5.971381708661757,
-          "predicted_revenue_p10": 174950.57159605695,
-          "predicted_revenue_p50": 744914.2116848056,
-          "predicted_revenue_p90": 1001934.3715799289,
-          "predicted_roas_p10": 1.885740146239897,
-          "predicted_roas_p50": 7.22628774228771,
-          "predicted_roas_p90": 9.256759214817308,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 105
+          "predicted_revenue_p10": 512187.3409027797,
+          "predicted_revenue_p50": 698532.0971298077,
+          "predicted_revenue_p90": 1416162.8356791341,
+          "predicted_roas_p10": 6.121564362620483,
+          "predicted_roas_p50": 6.836552893522146,
+          "predicted_roas_p90": 11.17777705795174,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 105,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "025006b90e49a04c6faa754095548dcc4fbdb99dd03f615a074f9e2882f63d6e"
         },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 1078746.447778759,
           "actual_spend": 183376.905625,
           "actual_roas": 5.882673415728595,
-          "predicted_revenue_p10": 290725.74185081903,
-          "predicted_revenue_p50": 1119190.388028723,
-          "predicted_revenue_p90": 1521375.558101042,
-          "predicted_roas_p10": 1.9823121724380073,
-          "predicted_roas_p50": 6.868075196255048,
-          "predicted_roas_p90": 8.891564955855168,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 113
+          "predicted_revenue_p10": 713609.348581027,
+          "predicted_revenue_p50": 966568.9717663161,
+          "predicted_revenue_p90": 1888594.7322730257,
+          "predicted_roas_p10": 5.878597766084465,
+          "predicted_roas_p50": 6.350134413951869,
+          "predicted_roas_p90": 9.591174756897479,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 113,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "63e77504b086d21f28076cf8bbe758548c9ef1571ffa44be97d4b855cd71deb1"
         },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 1069273.7926974092,
           "actual_spend": 184884.47306700004,
           "actual_roas": 5.783469941848045,
-          "predicted_revenue_p10": 275135.1525191976,
-          "predicted_revenue_p50": 713332.5925329147,
-          "predicted_revenue_p90": 1078190.4291214703,
-          "predicted_roas_p10": 2.737709900063696,
-          "predicted_roas_p50": 6.388162015870652,
-          "predicted_roas_p90": 9.19581081183255,
-          "uncertainty_method": "temporal_holdout_residual_quantiles",
-          "calibration_sample_count": 115
+          "predicted_revenue_p10": 470757.0242627271,
+          "predicted_revenue_p50": 648178.8104293337,
+          "predicted_revenue_p90": 1192529.8984668204,
+          "predicted_roas_p10": 5.898400225759508,
+          "predicted_roas_p50": 6.17217469284417,
+          "predicted_roas_p90": 8.58528227957763,
+          "uncertainty_method": "purged_temporal_holdout_residual_quantiles_v2",
+          "calibration_sample_count": 115,
+          "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "63e77504b086d21f28076cf8bbe758548c9ef1571ffa44be97d4b855cd71deb1"
         }
       ]
     }
@@ -169,165 +693,657 @@
   "baseline_horizons": [
     {
       "horizon_days": 30,
-      "folds": 3,
-      "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
+      "revenue_interval_coverage": 0.1667,
+      "revenue_interval_coverage_95_ci": [
+        0.0301,
+        0.5635
+      ],
+      "roas_interval_coverage": 0.3333,
+      "roas_interval_coverage_95_ci": [
+        0.0968,
+        0.7
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.4043,
+      "revenue_wape": 0.7465,
       "uncertainty_method": "statistical_lognormal_fallback",
       "median_calibration_samples": 0,
+      "model_versions_observed": [
+        "horizon-statistical-v7-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "98b39b3be576d4539790bfdfbdb587b244d5ed7b60b9972fbbfcf84466bbe0ec",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63"
+      ],
+      "feature_schema_fingerprints": [
+        "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 0.1667,
+          "revenue_interval_coverage_95_ci": [
+            0.0301,
+            0.5635
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.3333,
+          "roas_interval_coverage_95_ci": [
+            0.0968,
+            0.7
+          ]
+        },
+        "channel": {
+          "observations": 36,
+          "matched_observations": 34,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 34,
+          "revenue_interval_coverage": 0.4412,
+          "revenue_interval_coverage_95_ci": [
+            0.2888,
+            0.6055
+          ],
+          "roas_coverage_observations": 34,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.2941,
+          "roas_interval_coverage_95_ci": [
+            0.1683,
+            0.4617
+          ]
+        },
+        "campaign_type": {
+          "observations": 66,
+          "matched_observations": 56,
+          "missing_forecast_observations": 4,
+          "missing_actual_observations": 6,
+          "revenue_coverage_observations": 60,
+          "revenue_interval_coverage": 0.4,
+          "revenue_interval_coverage_95_ci": [
+            0.2857,
+            0.5263
+          ],
+          "roas_coverage_observations": 60,
+          "roas_unscorable_observations": 6,
+          "roas_interval_coverage": 0.3167,
+          "roas_interval_coverage_95_ci": [
+            0.2131,
+            0.4423
+          ]
+        },
+        "campaign": {
+          "observations": 328,
+          "matched_observations": 240,
+          "missing_forecast_observations": 46,
+          "missing_actual_observations": 42,
+          "revenue_coverage_observations": 286,
+          "revenue_interval_coverage": 0.542,
+          "revenue_interval_coverage_95_ci": [
+            0.484,
+            0.5988
+          ],
+          "roas_coverage_observations": 279,
+          "roas_unscorable_observations": 49,
+          "roas_interval_coverage": 0.5448,
+          "roas_interval_coverage_95_ci": [
+            0.4862,
+            0.6022
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1330620.836101853,
+          "actual_spend": 216048.992546,
+          "actual_roas": 6.15888470675717,
+          "predicted_revenue_p10": 1709216.0728295215,
+          "predicted_revenue_p50": 1709216.0728295215,
+          "predicted_revenue_p90": 11470299.429438788,
+          "predicted_roas_p10": 4.302264059673696,
+          "predicted_roas_p50": 4.302264059673696,
+          "predicted_roas_p90": 20.924685006458663,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 172013.82523352402,
+          "actual_spend": 31238.678925999997,
+          "actual_roas": 5.506437248546918,
+          "predicted_revenue_p10": 1527347.002013311,
+          "predicted_revenue_p50": 1527347.002013311,
+          "predicted_revenue_p90": 4944686.050307288,
+          "predicted_roas_p10": 7.421288815105656,
+          "predicted_roas_p50": 7.421288815105656,
+          "predicted_roas_p90": 21.87262421313546,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2026-02-05",
+          "actual_revenue": 352273.82280797,
+          "actual_spend": 66752.597414,
+          "actual_roas": 5.277305100551604,
+          "predicted_revenue_p10": 335705.2097683253,
+          "predicted_revenue_p50": 335705.2097683253,
+          "predicted_revenue_p90": 1527007.1723349264,
+          "predicted_roas_p10": 7.6484925950024465,
+          "predicted_roas_p50": 7.6484925950024465,
+          "predicted_roas_p90": 32.36300972533179,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 350133.26806964003,
           "actual_spend": 48443.997567,
           "actual_roas": 7.2275882597300445,
-          "predicted_revenue_p10": 63133.9122293614,
+          "predicted_revenue_p10": 512969.03180132475,
           "predicted_revenue_p50": 512969.03180132475,
-          "predicted_revenue_p90": 4953692.540702195,
-          "predicted_roas_p10": 0.9040803758759596,
-          "predicted_roas_p50": 6.6111650115861,
-          "predicted_roas_p90": 60.803222719466696,
+          "predicted_revenue_p90": 2199451.452574582,
+          "predicted_roas_p10": 7.109065981986038,
+          "predicted_roas_p50": 7.109065981986038,
+          "predicted_roas_p90": 27.248011655352112,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 376339.35690114903,
           "actual_spend": 68180.310644,
           "actual_roas": 5.519765946303556,
-          "predicted_revenue_p10": 80958.644105411,
-          "predicted_revenue_p50": 469972.33961672976,
-          "predicted_revenue_p90": 3239917.711098975,
-          "predicted_roas_p10": 1.8642059091760907,
-          "predicted_roas_p50": 9.739697349301785,
-          "predicted_roas_p90": 63.946656881938615,
+          "predicted_revenue_p10": 469972.3396167298,
+          "predicted_revenue_p50": 469972.3396167298,
+          "predicted_revenue_p90": 1299571.7780857687,
+          "predicted_roas_p10": 9.991640147707287,
+          "predicted_roas_p50": 9.991640147707287,
+          "predicted_roas_p90": 25.784496333410953,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-05-06",
           "actual_revenue": 342801.16772662,
           "actual_spend": 68260.164856,
           "actual_roas": 5.021979780590701,
-          "predicted_revenue_p10": 80857.57112359439,
-          "predicted_revenue_p50": 518619.5534948551,
-          "predicted_revenue_p90": 4029965.4239328047,
-          "predicted_roas_p10": 1.2456219407619538,
-          "predicted_roas_p50": 7.190464630436677,
-          "predicted_roas_p90": 53.213287259923206,
+          "predicted_revenue_p10": 518619.5534948552,
+          "predicted_revenue_p50": 518619.5534948552,
+          "predicted_revenue_p90": 1639351.7875548832,
+          "predicted_roas_p10": 7.660275373008818,
+          "predicted_roas_p50": 7.660275373008818,
+          "predicted_roas_p90": 20.808781369244084,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "98b39b3be576d4539790bfdfbdb587b244d5ed7b60b9972fbbfcf84466bbe0ec",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         }
       ]
     },
     {
       "horizon_days": 60,
-      "folds": 3,
-      "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
+      "revenue_interval_coverage": 0.0,
+      "revenue_interval_coverage_95_ci": [
+        0.0,
+        0.3903
+      ],
+      "roas_interval_coverage": 0.3333,
+      "roas_interval_coverage_95_ci": [
+        0.0968,
+        0.7
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.2552,
+      "revenue_wape": 1.0535,
       "uncertainty_method": "statistical_lognormal_fallback",
       "median_calibration_samples": 0,
+      "model_versions_observed": [
+        "horizon-statistical-v7-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63"
+      ],
+      "feature_schema_fingerprints": [
+        "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 0.0,
+          "revenue_interval_coverage_95_ci": [
+            0.0,
+            0.3903
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.3333,
+          "roas_interval_coverage_95_ci": [
+            0.0968,
+            0.7
+          ]
+        },
+        "channel": {
+          "observations": 38,
+          "matched_observations": 36,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 36,
+          "revenue_interval_coverage": 0.3611,
+          "revenue_interval_coverage_95_ci": [
+            0.2248,
+            0.5243
+          ],
+          "roas_coverage_observations": 36,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.3333,
+          "roas_interval_coverage_95_ci": [
+            0.2021,
+            0.4967
+          ]
+        },
+        "campaign_type": {
+          "observations": 72,
+          "matched_observations": 59,
+          "missing_forecast_observations": 7,
+          "missing_actual_observations": 6,
+          "revenue_coverage_observations": 66,
+          "revenue_interval_coverage": 0.3939,
+          "revenue_interval_coverage_95_ci": [
+            0.285,
+            0.5145
+          ],
+          "roas_coverage_observations": 66,
+          "roas_unscorable_observations": 6,
+          "roas_interval_coverage": 0.3636,
+          "roas_interval_coverage_95_ci": [
+            0.2581,
+            0.4842
+          ]
+        },
+        "campaign": {
+          "observations": 375,
+          "matched_observations": 254,
+          "missing_forecast_observations": 82,
+          "missing_actual_observations": 39,
+          "revenue_coverage_observations": 336,
+          "revenue_interval_coverage": 0.4524,
+          "revenue_interval_coverage_95_ci": [
+            0.4,
+            0.5058
+          ],
+          "roas_coverage_observations": 330,
+          "roas_unscorable_observations": 45,
+          "roas_interval_coverage": 0.5152,
+          "roas_interval_coverage_95_ci": [
+            0.4614,
+            0.5686
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-11-07",
+          "actual_revenue": 2558711.27399744,
+          "actual_spend": 550550.899628,
+          "actual_roas": 4.647547167257973,
+          "predicted_revenue_p10": 445646.6314860544,
+          "predicted_revenue_p50": 445646.6314860544,
+          "predicted_revenue_p90": 1277430.1570008276,
+          "predicted_roas_p10": 3.7870940348353197,
+          "predicted_roas_p50": 3.7870940348353197,
+          "predicted_roas_p90": 10.040803253100172,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1502634.661335377,
+          "actual_spend": 247287.671472,
+          "actual_roas": 6.076464113195866,
+          "predicted_revenue_p10": 3602809.02303765,
+          "predicted_revenue_p50": 3602809.02303765,
+          "predicted_revenue_p90": 24177925.154257234,
+          "predicted_roas_p10": 4.572925832509143,
+          "predicted_roas_p50": 4.572925832509143,
+          "predicted_roas_p90": 22.056551992735315,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2026-01-06",
+          "actual_revenue": 524287.648041494,
+          "actual_spend": 97991.27634,
+          "actual_roas": 5.3503502314060585,
+          "predicted_revenue_p10": 2857105.2453365736,
+          "predicted_revenue_p50": 2857105.2453365736,
+          "predicted_revenue_p90": 9249691.414101066,
+          "predicted_roas_p10": 6.926738673092839,
+          "predicted_roas_p50": 6.926738673092839,
+          "predicted_roas_p90": 20.36294438002899,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 702407.09087761,
           "actual_spend": 115196.594981,
           "actual_roas": 6.097464000506801,
-          "predicted_revenue_p10": 78074.86752945032,
-          "predicted_revenue_p50": 717931.5309684842,
-          "predicted_revenue_p90": 8241650.1018851595,
-          "predicted_roas_p10": 0.9130959834507558,
-          "predicted_roas_p50": 7.556674462053118,
-          "predicted_roas_p90": 82.61759707427217,
+          "predicted_revenue_p10": 717931.5309684844,
+          "predicted_revenue_p50": 717931.5309684844,
+          "predicted_revenue_p90": 3265623.7492949353,
+          "predicted_roas_p10": 8.11034911704477,
+          "predicted_roas_p50": 8.11034911704477,
+          "predicted_roas_p90": 35.35352488888847,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 726472.6249707891,
           "actual_spend": 116624.30821100001,
           "actual_roas": 6.229169854164829,
-          "predicted_revenue_p10": 132269.16233118772,
-          "predicted_revenue_p50": 1074700.4261216305,
-          "predicted_revenue_p90": 10378388.534599617,
-          "predicted_roas_p10": 0.9470500858773414,
-          "predicted_roas_p50": 6.925390632415216,
-          "predicted_roas_p90": 63.69384699933043,
+          "predicted_revenue_p10": 1074700.4261216307,
+          "predicted_revenue_p50": 1074700.4261216307,
+          "predicted_revenue_p90": 4607981.583271501,
+          "predicted_roas_p10": 7.497829771961866,
+          "predicted_roas_p50": 7.497829771961866,
+          "predicted_roas_p90": 28.959736786759397,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-04-06",
           "actual_revenue": 719140.524627769,
           "actual_spend": 136440.4755,
           "actual_roas": 5.270727194349077,
-          "predicted_revenue_p10": 155635.4054925724,
-          "predicted_revenue_p50": 903477.7016357055,
-          "predicted_revenue_p90": 6228437.539381001,
-          "predicted_roas_p10": 1.7918805694083921,
-          "predicted_roas_p50": 9.36182689278136,
-          "predicted_roas_p90": 61.46572131708313,
+          "predicted_revenue_p10": 903477.7016357057,
+          "predicted_revenue_p50": 903477.7016357057,
+          "predicted_revenue_p90": 2498305.6328376816,
+          "predicted_roas_p10": 9.605345782155135,
+          "predicted_roas_p50": 9.605345782155135,
+          "predicted_roas_p90": 24.775485278304163,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "3f526270f44671be33bd87b9a68c081b8aed2001651c8b88a84861142c685a98",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         }
       ]
     },
     {
       "horizon_days": 90,
-      "folds": 3,
-      "revenue_interval_coverage": 1.0,
-      "roas_interval_coverage": 1.0,
+      "requested_folds": 6,
+      "step_days": 30,
+      "folds": 6,
+      "revenue_interval_coverage": 0.8333,
+      "revenue_interval_coverage_95_ci": [
+        0.4365,
+        0.9699
+      ],
+      "roas_interval_coverage": 0.5,
+      "roas_interval_coverage_95_ci": [
+        0.1876,
+        0.8124
+      ],
       "nominal_interval_coverage": 0.8,
-      "revenue_wape": 0.2095,
+      "revenue_wape": 0.3322,
       "uncertainty_method": "statistical_lognormal_fallback",
       "median_calibration_samples": 0,
+      "model_versions_observed": [
+        "horizon-statistical-v7-factor-copula"
+      ],
+      "training_data_fingerprints": [
+        "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+        "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+        "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+        "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+        "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+        "fd593a25e36aef9041f0a83a2638bb655e7223e3fc0786b22ef75fc3f24edfad"
+      ],
+      "feature_schema_fingerprints": [
+        "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+      ],
+      "coverage_by_hierarchy": {
+        "overall": {
+          "observations": 6,
+          "matched_observations": 6,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 0,
+          "revenue_coverage_observations": 6,
+          "revenue_interval_coverage": 0.8333,
+          "revenue_interval_coverage_95_ci": [
+            0.4365,
+            0.9699
+          ],
+          "roas_coverage_observations": 6,
+          "roas_unscorable_observations": 0,
+          "roas_interval_coverage": 0.5,
+          "roas_interval_coverage_95_ci": [
+            0.1876,
+            0.8124
+          ]
+        },
+        "channel": {
+          "observations": 40,
+          "matched_observations": 38,
+          "missing_forecast_observations": 0,
+          "missing_actual_observations": 2,
+          "revenue_coverage_observations": 38,
+          "revenue_interval_coverage": 0.6842,
+          "revenue_interval_coverage_95_ci": [
+            0.5254,
+            0.8092
+          ],
+          "roas_coverage_observations": 38,
+          "roas_unscorable_observations": 2,
+          "roas_interval_coverage": 0.4737,
+          "roas_interval_coverage_95_ci": [
+            0.3248,
+            0.6274
+          ]
+        },
+        "campaign_type": {
+          "observations": 77,
+          "matched_observations": 62,
+          "missing_forecast_observations": 10,
+          "missing_actual_observations": 5,
+          "revenue_coverage_observations": 72,
+          "revenue_interval_coverage": 0.5556,
+          "revenue_interval_coverage_95_ci": [
+            0.4409,
+            0.6646
+          ],
+          "roas_coverage_observations": 72,
+          "roas_unscorable_observations": 5,
+          "roas_interval_coverage": 0.4583,
+          "roas_interval_coverage_95_ci": [
+            0.3483,
+            0.5726
+          ]
+        },
+        "campaign": {
+          "observations": 404,
+          "matched_observations": 264,
+          "missing_forecast_observations": 119,
+          "missing_actual_observations": 21,
+          "revenue_coverage_observations": 383,
+          "revenue_interval_coverage": 0.4621,
+          "revenue_interval_coverage_95_ci": [
+            0.4128,
+            0.5122
+          ],
+          "roas_coverage_observations": 377,
+          "roas_unscorable_observations": 27,
+          "roas_interval_coverage": 0.4615,
+          "roas_interval_coverage_95_ci": [
+            0.4119,
+            0.512
+          ]
+        }
+      },
       "fold_results": [
+        {
+          "cutoff": "2025-10-08",
+          "actual_revenue": 2755600.973445665,
+          "actual_spend": 605413.8588690001,
+          "actual_roas": 4.551598766822951,
+          "predicted_revenue_p10": 1402825.574262532,
+          "predicted_revenue_p50": 1402825.574262532,
+          "predicted_revenue_p90": 7392543.262468355,
+          "predicted_roas_p10": 4.528107343805851,
+          "predicted_roas_p50": 4.528107343805851,
+          "predicted_roas_p90": 21.628220578145854,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "fd593a25e36aef9041f0a83a2638bb655e7223e3fc0786b22ef75fc3f24edfad",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2025-11-07",
+          "actual_revenue": 2730725.099230964,
+          "actual_spend": 581789.578554,
+          "actual_roas": 4.69366451358239,
+          "predicted_revenue_p10": 1414508.391679932,
+          "predicted_revenue_p50": 1414508.391679932,
+          "predicted_revenue_p90": 8100708.103658589,
+          "predicted_roas_p10": 3.991857777873542,
+          "predicted_roas_p50": 3.991857777873542,
+          "predicted_roas_p90": 20.254663518374816,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "d1c17af7e876dfee5a5700015265a8d2bd2bafbdc011058d74263e8d7de5f808",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
+        {
+          "cutoff": "2025-12-07",
+          "actual_revenue": 1854908.4841433468,
+          "actual_spend": 314040.268886,
+          "actual_roas": 5.90659436996183,
+          "predicted_revenue_p10": 1714349.8500606618,
+          "predicted_revenue_p50": 1714349.8500606618,
+          "predicted_revenue_p90": 5650145.159582088,
+          "predicted_roas_p10": 4.626453327496329,
+          "predicted_roas_p50": 4.626453327496329,
+          "predicted_roas_p90": 13.320948536960627,
+          "uncertainty_method": "statistical_lognormal_fallback",
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "f8bf0e6b7280ce1d1549b6bf950e687a7c28489846e265993a4b8d1113d06621",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
+        },
         {
           "cutoff": "2026-01-06",
           "actual_revenue": 874420.916111134,
           "actual_spend": 146435.273907,
           "actual_roas": 5.971381708661757,
-          "predicted_revenue_p10": 145942.1968132039,
+          "predicted_revenue_p10": 726590.5051369775,
           "predicted_revenue_p50": 726590.5051369775,
-          "predicted_revenue_p90": 3623161.934356059,
-          "predicted_roas_p10": 1.5730675072987623,
-          "predicted_roas_p50": 7.048532540490225,
-          "predicted_roas_p90": 33.473986494483896,
+          "predicted_revenue_p90": 1729052.7591191786,
+          "predicted_roas_p10": 7.03056671612474,
+          "predicted_roas_p50": 7.03056671612474,
+          "predicted_roas_p90": 15.887852216276872,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "39c4e75c5350b7881fee04ac6f0c44ab52388e93d2eca9aab9067cca8bc61aa1",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-02-05",
           "actual_revenue": 1078746.447778759,
           "actual_spend": 183376.905625,
           "actual_roas": 5.882673415728595,
-          "predicted_revenue_p10": 133704.97281754485,
-          "predicted_revenue_p50": 1261079.6834325704,
-          "predicted_revenue_p90": 15118340.553945662,
-          "predicted_roas_p10": 0.911666760034326,
-          "predicted_roas_p50": 7.738799570589347,
-          "predicted_roas_p90": 88.35800361347687,
+          "predicted_revenue_p10": 1261079.6834325702,
+          "predicted_revenue_p50": 1261079.6834325702,
+          "predicted_revenue_p90": 5750722.989264073,
+          "predicted_roas_p10": 8.224235342770553,
+          "predicted_roas_p50": 8.224235342770553,
+          "predicted_roas_p90": 37.84960989801242,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "fa2a134e84db407cda050ec645db9c7b5130052077538f0a23b4acc887c23f63",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         },
         {
           "cutoff": "2026-03-07",
           "actual_revenue": 1069273.7926974092,
           "actual_spend": 184884.47306700004,
           "actual_roas": 5.783469941848045,
-          "predicted_revenue_p10": 134425.86211831257,
-          "predicted_revenue_p50": 766182.454832244,
-          "predicted_revenue_p90": 5013829.993656347,
-          "predicted_roas_p10": 1.3375935796507248,
-          "predicted_roas_p50": 6.8614524366626775,
-          "predicted_roas_p90": 42.76260558343443,
+          "predicted_revenue_p10": 766182.4548322437,
+          "predicted_revenue_p50": 766182.4548322437,
+          "predicted_revenue_p90": 2193101.048538404,
+          "predicted_roas_p10": 7.339553130108596,
+          "predicted_roas_p50": 7.339553130108596,
+          "predicted_roas_p90": 21.074841623224913,
           "uncertainty_method": "statistical_lognormal_fallback",
-          "calibration_sample_count": 0
+          "calibration_sample_count": 0,
+          "model_version": "horizon-statistical-v7-factor-copula",
+          "training_data_fingerprint": "7b12568f837d8ccccfd14dc301ba8dafa2811342be4b03cf6e4d74da99e2b1ec",
+          "feature_schema_fingerprint": "1078b221af300e53a59203a0bea6a955dcb9e8b6fe62ef7583d707e83cc7fb34"
         }
       ]
     }
-  ]
+  ],
+  "artifact_provenance": {
+    "artifact_sha256": "7f88607a703d529564432a0fa43c99cf2b9669b93948fef67ffffcf5795d83fa",
+    "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+    "training_data_fingerprint": "e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4",
+    "feature_schema_fingerprint": "f51e8603f9cc1710fd9f7c873163912b52f399afdda92c33a1aa0fce5d520a32"
+  }
 }

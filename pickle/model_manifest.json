@@ -1,6 +1,9 @@
 {
-  "artifact_sha256": "6f36061b4dbbe2703d53547aa16ef86dec837815366ccdfc731bca437efbea10",
-  "model_version": "horizon-direct-ridge-v3-seasonal-plan",
-  "python_major_minor": "3.11",
-  "purpose": "Trusted, pre-trained offline inference artifact for the protected hackathon path."
+  "artifact_sha256": "7f88607a703d529564432a0fa43c99cf2b9669b93948fef67ffffcf5795d83fa",
+  "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
+  "artifact_build_python_major_minor": "3.12",
+  "minimum_python_major_minor": "3.11",
+  "purpose": "Trusted, pre-trained offline inference artifact for the protected hackathon path.",
+  "training_data_fingerprint": "e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4",
+  "feature_schema_fingerprint": "f51e8603f9cc1710fd9f7c873163912b52f399afdda92c33a1aa0fce5d520a32"
 }

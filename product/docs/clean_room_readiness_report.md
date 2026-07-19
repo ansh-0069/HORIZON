@@ -1,78 +1,82 @@
 # Clean Room Readiness Report
 
-**Audit date:** 2026-07-18
-**Scope:** Hackathon evaluator path only: `run.sh`, `src/`, `pickle/model.pkl`, `requirements.txt`, and supplied campaign CSVs. The optional planner UI and `product/app/evidence.py` are explicitly outside this scope.
+**Audit scope:** Hackathon evaluator path only: `run.sh`, `src/`, `pickle/model.pkl`, `pickle/model_manifest.json`, `requirements.txt`, and supplied campaign CSVs. The optional planner UI and all `product/app/` code are outside this scope.
 
-## Result
+## Current status
 
-**Submission Readiness Score: 90/100**
+**Status: Passed final post-v5 clean-room verification (2026-07-19).**
 
-The repository is ready for an offline evaluator rehearsal. There are no code-level blockers in the evaluator path. The outstanding score deduction is for the organizer's final `predictions.csv` scorer schema, which is not specified in the supplied submission guide and therefore cannot yet be validated exactly.
+The repository now seals the following evaluator artifact in `pickle/model_manifest.json`:
 
-**Latest local verification (2026-07-19):** `product.scripts.release_check --strict` passed, and the exact Git-Bash rehearsal produced `156` rows spanning the `30`, `60`, and `90` day horizons with the `horizon-direct-ridge-v3-seasonal-plan` artifact. The model is loaded read-only and its SHA-256 is verified unchanged by the rehearsal.
+| Field | Sealed value |
+| --- | --- |
+| Artifact SHA-256 | `7f88607a703d529564432a0fa43c99cf2b9669b93948fef67ffffcf5795d83fa` |
+| Model version | `horizon-direct-ridge-v5-oof-factor-copula` |
+| Artifact build runtime | `3.12` |
+| Minimum supported runtime | `3.11` |
+| Training-data fingerprint | `e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4` |
+| Feature-schema fingerprint | `f51e8603f9cc1710fd9f7c873163912b52f399afdda92c33a1aa0fce5d520a32` |
 
-## Evidence
+Earlier rehearsal evidence used the v4 artifact and is intentionally not used as evidence for v5. The final v5 rehearsal was rerun through Git Bash against an isolated copy of `./data`, the sealed pickle, and its copied sibling manifest. The persisted evidence is `product/models/submission_rehearsal.json`.
 
-Command executed against an isolated temporary copy of the supplied data and `pickle/model.pkl`:
+**Recorded result:** success; `162` rows; all locked `horizon-v1` columns; horizons `30`, `60`, and `90`; model SHA unchanged; `model_manifest_enforced=true`; only NumPy/Pandas imports; no network imports or prediction-time training calls. The root sample data emitted only the documented unreviewed metadata warnings. The same sealed artifact also produced a byte-identical CSV under local Python 3.11 and 3.12 runs (`SHA-256 17940DAB2FE35A79E7904770C21B29DF61098057D54147DF5CD193D4E6CA8324`); the adapter fixes numeric text at six decimal places and LF endings for portable serialization.
+
+## Static protected-path evidence
+
+The protected path satisfies the evaluator contract as follows; the recorded rehearsal verifies these behaviors end to end.
+
+| Requirement | Protected-path implementation |
+| --- | --- |
+| `./run.sh DATA_DIR MODEL_PATH OUTPUT_PATH` | `run.sh` resolves defaults/arguments, selects a local Python executable, and invokes `python -m src.predict`. |
+| Inference only | `src.predict` loads the sealed `HorizonModel`; no protected-path training entry point is invoked. |
+| No API key or external service | `run.sh` and `src/` use local files, Python standard library, NumPy, and Pandas only. |
+| No runtime download | Package installation is separate from execution; the runner does not install packages or access a network. |
+| Artifact integrity | The manifest pins SHA-256, model version, and model provenance; mismatch fails before inference. |
+| Output generation | `src/output_adapter.py` is the sole writer and atomically writes a non-empty UTF-8 `predictions.csv` only after schema validation. |
+| Meaningful failures | Expected input, artifact, validation, and output errors are surfaced as non-zero `ERROR: offline prediction failed: ...` results. |
+
+## Recorded final post-v5 verification
+
+Run these checks from a fresh checkout after dependencies have been installed from the pinned requirements (or a pre-provisioned offline wheelhouse):
+
+```bash
+python -m unittest discover -s product/tests -q
+python -m product.scripts.release_check --strict
+./run.sh ./data ./pickle/model.pkl ./output/predictions.csv
+python -m product.scripts.verify_evaluator_contract \
+  --predictions ./output/predictions.csv
+```
+
+Then run an isolated Git-Bash or Linux rehearsal against a temporary copy of the exact submitted data and sealed artifact:
 
 ```powershell
 python -m product.scripts.rehearse_submission `
-  --data-dir .\product\demo_data `
+  --data-dir .\data `
   --model .\pickle\model.pkl `
   --bash "C:\Program Files\Git\bin\bash.exe" `
   --temporary-root .\product\output
 ```
 
-Observed result:
+The recorded command exited successfully. Its report records the output row count, horizons, exact output header, model immutability, manifest enforcement, dependency audit, and quality warnings. The hash remained `7f88607a703d529564432a0fa43c99cf2b9669b93948fef67ffffcf5795d83fa` before and after the rehearsal.
 
-- Exit status: success
-- Output rows: `156`
-- Horizons: `30`, `60`, `90`
-- Output: one `overall` record per horizon plus campaign, campaign-type, and channel records
-- Model artifact SHA-256 before and after inference: unchanged
-- Evaluator dependencies: `numpy`, `pandas`, both pinned in `requirements.txt`
-- Network-client imports in `src/`: none
-- Training calls in `src/predict.py`: none
+## Remaining release risks
 
-## ✅ Passes
+1. **Organizer scorer schema remains unpublished in the supplied guide.** `horizon-v1` is locked locally through `src/output_adapter.py` and its fixture. If organizers publish a different required header, row granularity, or field semantics, adapt the centralized adapter and rerun every final gate.
 
-| Requirement | Result | Evidence |
-|---|---|---|
-| `./run.sh DATA_DIR MODEL_PATH OUTPUT_PATH` | Pass | Rehearsal invokes the exact runner from a temporary data/model copy and produces `predictions.csv`. |
-| No training at evaluation time | Pass | `src.predict` loads `pickle/model.pkl`; its import/call audit finds no `.fit(...)` call and the copied model hash is unchanged. |
-| No OpenAI or external API calls | Pass | `run.sh` imports only `src.predict`; `src/` contains no OpenAI, HTTP, socket, request, or URL client imports. Optional `app/` code is not imported. |
-| No network required | Pass | The evaluator path is file-based and only imports standard-library modules plus NumPy/Pandas. No credentials are read. |
-| No hidden Python dependencies | Pass | Static dependency audit found only `numpy` and `pandas`, both pinned in `requirements.txt`. |
-| `predictions.csv` is generated | Pass | The verified rehearsal generated 156 valid rows. Output writing is atomic, so an existing valid file is not replaced by a partial write. |
-| Failures are meaningful | Pass | Missing data directory, missing model, and empty/corrupt pickle each exit with status `2`, print an `ERROR: offline prediction failed: ...` message, and leave no output CSV. |
+## Known environment and data warnings
 
-## ⚠ Warnings
+1. **Python runtime:** the pinned NumPy/Pandas versions require Python 3.11+.
+2. **Bash runtime:** `run.sh` assumes a POSIX shell with standard `mkdir` and `dirname`, consistent with the stated evaluator command. Windows rehearsal needs Git Bash or WSL; Linux evaluation does not need either product tool.
+3. **Input quality:** absent/unreviewed semantic metadata, unreviewed Meta taxonomy mappings, and missing configured-budget rows are surfaced as warnings; corrupted fields, blank IDs, invalid numeric values, or duplicate campaign-day rows fail closed. Microsoft `CampaignType` presentation variants are deterministically normalized (`Audience` to `DISPLAY`, `PerformanceMax` to `PERFORMANCE_MAX`, `Search` to `SEARCH`, and `Shopping` to `SHOPPING`) before model feature lookup; unrecognized non-blank types remain disclosed upper-snake labels.
+4. **Forecast use:** v5 includes empirical OOF residual calibration and deterministic factor-copula aggregation. It is not conformal prediction and must not be represented as a guaranteed confidence interval.
 
-1. **Final scorer schema is not in the supplied guide.** The current output contains 21 documented columns. When organizers publish exact required column names, hierarchy expectations, IDs, or row granularity, update the versioned `src/output_adapter.py` contract, then run `product.scripts.verify_evaluator_contract` against their header fixture before rerunning this rehearsal. This is the main remaining submission risk.
-2. **Python runtime must be 3.11+.** This is documented in `README.md`. The evaluator must install the pinned requirements under a compatible Python runtime before being taken offline.
-3. **Source-data quality warnings are intentional.** The supplied files emit warnings for 21 missing configured-budget rows and Meta conversion semantics/taxonomy review. These do not stop output generation, but they should be transparently mentioned in the demo.
-4. **Bash is part of the stated evaluator contract.** `run.sh` assumes a POSIX shell with standard `mkdir` and `dirname`, consistent with the guide's `./run.sh` command. Windows rehearsal needs Git Bash or WSL; this is not a runtime dependency for a Linux evaluator.
+## Recorded sign-off evidence
 
-## ❌ Blocking Issues
+The following are recorded for the sealed v5 artifact:
 
-**None in the current offline evaluator path.**
-
-Do not submit until the final organizer output schema is checked against the adapter. If that schema differs from the current 21-column format, it becomes a blocking submission task, not a modeling task.
-
-## Fixes Applied During This Audit
-
-| Finding | Affected files | Production-quality resolution |
-|---|---|---|
-| Blank `quality_flags` values became null when an evaluator re-read CSV output. | `src/output_adapter.py` | Optional text fields now serialize as explicit sentinels such as `none`, preventing ambiguous empty CSV cells. |
-| Prediction failures produced raw tracebacks and output writes were not fully cleanup-safe. | `src/predict.py` | Added expected-error handling with exit code `2` and `ERROR:` messages; added atomic write/replace with temporary-file cleanup. |
-| Windows clean-room rehearsal could not pass temporary paths through Git Bash. | `product/scripts/rehearse_submission.py` | Added safe path conversion, a writable temporary-root option, model hash verification, output contract validation, and static dependency/training/network audits. |
-
-## Release Gate
-
-Before publishing the submission repository:
-
-1. Install `requirements.txt` on the evaluator's Python 3.11+ runtime while internet access is available.
-2. Run `python -m unittest discover -s product/tests -q`.
-3. Run `product.scripts.rehearse_submission` against the exact model and sample data being submitted.
-4. Replace or adapt only the centralized output adapter once the organizer releases the final CSV contract.
-5. Run the rehearsal again and attach `product/models/submission_rehearsal.json` to internal release notes.
+- `release_check --strict` succeeds;
+- the exact `run.sh` command succeeds from a clean temporary working copy;
+- `predictions.csv` is non-empty, valid against the locked adapter contract, and includes 30/60/90-day outputs;
+- the model SHA-256 is unchanged before and after inference;
+- negative-path checks return actionable errors without leaving a partial output; and
+- the exact repository revision must still be pushed and referenced for submission.

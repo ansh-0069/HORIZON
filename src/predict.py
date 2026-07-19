@@ -44,6 +44,11 @@ def load_model(path: Path) -> HorizonModel:
         raise TypeError("Model artifact is not a HorizonModel")
     if manifest_path.is_file() and manifest.get("model_version") != model.model_version:
         raise ValueError("Model artifact version does not match model_manifest.json")
+    for field in ("training_data_fingerprint", "feature_schema_fingerprint"):
+        declared = manifest.get(field) if manifest_path.is_file() else None
+        actual = getattr(model, field, "")
+        if declared is not None and declared != actual:
+            raise ValueError(f"Model artifact {field} does not match model_manifest.json")
     return replace(model, artifact_sha256=artifact_sha256)
 
 

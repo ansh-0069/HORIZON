@@ -15,10 +15,11 @@ import stat
 import subprocess
 import sys
 
-from src.output_adapter import FORECAST_COLUMNS
-
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.output_adapter import FORECAST_COLUMNS
 REQUIRED_ROOT_FILES = (
     "run.sh",
     "requirements.txt",

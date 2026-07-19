@@ -24,19 +24,23 @@ export MKL_NUM_THREADS=1
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 if [[ -n "${PYTHON_BIN:-}" ]]; then
-  PYTHON_EXECUTABLE="$PYTHON_BIN"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_EXECUTABLE="python3"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_EXECUTABLE="python"
-elif command -v py >/dev/null 2>&1; then
-  PYTHON_EXECUTABLE="py"
+  # PYTHON_BIN is intentionally a single executable path, not a shell
+  # command. Quoting it preserves paths containing spaces on Windows/WSL.
+  PYTHON_COMMAND=("$PYTHON_BIN")
+elif command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1; then
+  PYTHON_COMMAND=(python3)
+elif command -v python >/dev/null 2>&1 && python --version >/dev/null 2>&1; then
+  PYTHON_COMMAND=(python)
+elif command -v py >/dev/null 2>&1 && py -3 --version >/dev/null 2>&1; then
+  # A Windows App Execution Alias can expose `py` even when no interpreter is
+  # installed. Probe the requested Python 3 launcher before selecting it.
+  PYTHON_COMMAND=(py -3)
 else
-  echo "Python 3 was not found. Set PYTHON_BIN or add python3/python to PATH." >&2
+  echo "Python 3 was not found or is not runnable. Set PYTHON_BIN or add a runnable python3/python to PATH." >&2
   exit 127
 fi
 
-"$PYTHON_EXECUTABLE" -m src.predict \
+"${PYTHON_COMMAND[@]}" -m src.predict \
   --data-dir "$DATA_DIR" \
   --model "$MODEL_PATH" \
   --output "$OUTPUT_PATH"

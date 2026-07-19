@@ -28,7 +28,7 @@ flowchart LR
 
 ## Current schema: `horizon-v1`
 
-The current schema preserves the project’s forecast output while keeping compatibility aliases for likely internal-name changes. Required fields fail closed when neither an alias nor an explicitly declared default exists. Defaults are used only for presentation fields where fabrication cannot alter a predicted value.
+The current schema preserves the project's forecast output while keeping compatibility aliases for likely internal-name changes. Required fields fail closed when neither an alias nor an explicitly declared default exists. Defaults are used only for presentation fields where fabrication cannot alter a predicted value.
 
 | Target column | Accepted internal aliases | Type | Default |
 | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ It reports deterministic, actionable errors:
 | Wrong output order or columns | `SchemaValidationError` | Shows expected and received columns |
 | Failure while writing | Original I/O exception | Removes temporary file; leaves prior destination intact |
 
-Writing uses a same-directory temporary file followed by `Path.replace`. This prevents a partially written `predictions.csv` from appearing after a process interruption. It is compatible with the evaluator's local, offline filesystem model. It is not a distributed transaction; a multi-writer production service would additionally serialize writes outside this module.
+Writing uses a same-directory temporary file followed by `Path.replace`. This prevents a partially written `predictions.csv` from appearing after a process interruption. Numeric fields serialize with the versioned fixed format `%.6f` and line endings are explicitly `\n`, eliminating harmless renderer differences across supported Python/NumPy builds without changing upstream forecast values. It is compatible with the evaluator's local, offline filesystem model. It is not a distributed transaction; a multi-writer production service would additionally serialize writes outside this module.
 
 ## Extension example
 
@@ -127,5 +127,5 @@ Before submission, add an official evaluator fixture test if and when an output 
 
 - Runtime dependencies are only Pandas and the Python standard library; no network client, UI, model SDK, or optional product module is imported.
 - Input and output are DataFrames/filesystem paths only; adapter state is immutable per invocation.
-- The adapter is `O(R × C)` for `R` rows and fixed schema width `C`, plus `O(R log R)` when the version declares sort keys. Current `C` is constant, so memory is linear in output rows.
+- The adapter is `O(R x C)` for `R` rows and fixed schema width `C`, plus `O(R log R)` when the version declares sort keys. Current `C` is constant, so memory is linear in output rows.
 - A schema is selected before data is adapted, making behavior reproducible and testable even as future versions are added.

@@ -119,9 +119,18 @@ def rehearse(data_dir: Path, model_path: Path, runner: Path, bash: str | None, t
         root = Path(temporary)
         evaluator_data = root / "data"
         evaluator_model = root / "model.pkl"
+        evaluator_manifest = root / "model_manifest.json"
         output_path = root / "predictions.csv"
         shutil.copytree(data_dir, evaluator_data)
         shutil.copy2(model_path, evaluator_model)
+        source_manifest = model_path.with_name("model_manifest.json")
+        manifest_copied = source_manifest.is_file()
+        if manifest_copied:
+            # ``src.predict.load_model`` looks for the sibling manifest by its
+            # fixed protected-path name. Copy it into the isolated evaluator
+            # layout so this rehearsal proves the same artifact integrity gate
+            # that the organizer runner will execute.
+            shutil.copy2(source_manifest, evaluator_manifest)
         model_before = _sha256(evaluator_model)
         command, python_bin = _runner_command(runner, evaluator_data, evaluator_model, output_path, bash)
         env = {"PATH": os.environ.get("PATH", ""), "PYTHON_BIN": python_bin or sys.executable}
@@ -156,6 +165,7 @@ def rehearse(data_dir: Path, model_path: Path, runner: Path, bash: str | None, t
             "columns": list(output.columns),
             "horizons": sorted(int(value) for value in output["horizon_days"].unique()),
             "model_unchanged": True,
+            "model_manifest_enforced": manifest_copied,
             "dependency_audit": dependency_audit,
             "runner_messages": runner_messages,
         }

@@ -133,6 +133,13 @@ V1_SCHEMA = OutputSchema(
 SCHEMA_REGISTRY: Mapping[str, OutputSchema] = {V1_SCHEMA.version: V1_SCHEMA}
 DEFAULT_SCHEMA_VERSION = V1_SCHEMA.version
 
+# Forecast calculations remain upstream, but the public CSV needs a stable
+# text representation. Six digits after the decimal are far more precise
+# than the monetary/ROAS decision inputs while eliminating harmless
+# sub-nanounit renderer differences across supported Python/NumPy builds.
+# This is serialization policy only, not rounding used by the model.
+CSV_FLOAT_FORMAT = "%.6f"
+
 # Transitional public constant for existing callers. It is defined here rather
 # than in contracts.py so this module remains the single owner of CSV schema.
 FORECAST_COLUMNS = V1_SCHEMA.columns
@@ -261,7 +268,12 @@ class OutputAdapter:
                 delete=False,
             ) as handle:
                 temporary_path = Path(handle.name)
-                output.to_csv(handle, index=False)
+                output.to_csv(
+                    handle,
+                    index=False,
+                    float_format=CSV_FLOAT_FORMAT,
+                    lineterminator="\n",
+                )
             temporary_path.replace(output_path)
         except Exception:
             if temporary_path is not None:

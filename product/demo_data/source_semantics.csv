@@ -1,0 +1,4 @@
+source_system,currency,timezone,attribution_method,revenue_field,review_status
+google_ads,USD,UTC,platform_attributed,metrics_conversions_value,reviewed
+microsoft_ads,USD,UTC,platform_attributed,Revenue,reviewed
+meta_ads,USD,UTC,platform_attributed,conversion,reviewed

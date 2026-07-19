@@ -14,7 +14,7 @@
           <h1>Horizon</h1>
           <p class="subhead">Probabilistic revenue planning for cross-channel media.</p>
         </div>
-        <div class="status"><span></span> Offline forecast · Evidence-grounded insights</div>
+        <div class="status"><span></span> Local prototype · Offline forecast · Deterministic brief</div>
       </header>
 
       <section class="control-panel">
@@ -28,6 +28,7 @@
 
       <section id="notice" class="notice loading">Loading the baseline plan…</section>
       <section id="guardrail-delta" class="delta-banner" aria-live="polite">Budget-shock guardrail delta will appear after you Simulate plan.</section>
+      <section id="scenario-state" class="delta-banner" aria-live="polite">Loading a scenario that can be saved and briefed…</section>
 
       <section class="metric-grid" aria-label="Forecast summary">
         <article class="metric"><p>Expected revenue</p><strong id="revenue">—</strong><span id="revenue-range">P10-P90: —</span></article>
@@ -43,7 +44,7 @@
 
       <section class="grid-two">
         <article class="panel"><div class="panel-header"><div><p class="eyebrow">ALLOCATION OUTLOOK</p><h2>Channel contribution</h2></div><p>Median forecast</p></div><div id="channels" class="table-wrap"></div></article>
-        <article class="panel evidence"><div class="panel-header"><div><p class="eyebrow">EVIDENCE BRIEF</p><h2 id="headline">—</h2></div><button id="ai-brief" class="outline compact">Show decision brief</button></div><div id="evidence"></div><div id="ai-evidence" class="ai-evidence" aria-live="polite"></div></article>
+        <article class="panel evidence"><div class="panel-header"><div><p class="eyebrow">DECISION BRIEF</p><h2 id="headline">—</h2></div><button id="decision-brief" class="outline compact" aria-describedby="decision-brief-note">Generate deterministic brief</button></div><p id="decision-brief-note" class="panel-note">This control uses sealed forecast evidence locally. It does not use an API key, the internet, or a live LLM.</p><div id="evidence"></div><div id="decision-brief-output" class="decision-brief-output" aria-live="polite"></div><details class="live-narration-disclosure"><summary>Optional live LLM narration is disabled by default</summary><p>It remains disabled unless the local server is explicitly started with <code>--enable-live-llm</code> on a localhost-only host and an API caller sends <code>prefer_live_llm: true</code>. It can summarize sealed evidence, but never changes forecasts, intervals, or recommendations.</p></details></article>
       </section>
 
       <section class="grid-two">
@@ -53,9 +54,18 @@
 
       <section class="panel campaign-panel"><div class="panel-header"><div><p class="eyebrow">CAMPAIGN PRIORITY QUEUE</p><h2>Highest-value campaign scenarios</h2></div><p>P10–P90, median ROAS, and support flags</p></div><div id="campaigns" class="table-wrap"></div></section>
 
+      <section class="panel product-scope-panel" aria-label="Implemented capabilities and product roadmap">
+        <div class="panel-header"><div><p class="eyebrow">PRODUCT SCOPE</p><h2>What is implemented today</h2></div><p>Transparent prototype disclosure</p></div>
+        <div class="scope-grid">
+          <section class="scope-column"><h3>Implemented in this local prototype</h3><ul><li>Offline data validation, canonicalization, and pre-trained inference.</li><li>30/60/90-day scenario forecasts with P10/P50/P90 ranges.</li><li>Constraint-aware budget allocation and a local decision ledger.</li><li>Deterministic decision briefs tied to sealed forecast evidence.</li></ul></section>
+          <section class="scope-column roadmap"><h3>Production roadmap — not implemented here</h3><ul><li>Multi-tenant identity, permissions, and tenant data isolation.</li><li>Managed cloud deployment, asynchronous orchestration, and observability.</li><li>Governed model registry, feature store, and scheduled retraining.</li><li>Reviewed attribution integrations and portfolio-level calibration at scale.</li></ul></section>
+        </div>
+        <p class="scope-disclaimer">This is a single-user local product prototype. It does not claim production authentication, multi-tenancy, cloud operations, or live LLM availability.</p>
+      </section>
+
       <section class="grid-two">
         <article class="panel"><div class="panel-header"><div><p class="eyebrow">TRUST CENTER</p><h2>Data health and backtest</h2></div></div><div id="health"></div><div id="trust"></div></article>
-        <article class="panel"><div class="panel-header"><div><p class="eyebrow">OPERATIONAL RISK</p><h2>Model boundaries</h2></div></div><ul class="boundary"><li>Meta <code>conversion</code> is treated as attributed revenue only by documented assumption.</li><li>Platform attribution is the source of truth; Horizon does not claim causal lift.</li><li>Budget changes are conditional forecasts; wide ranges require validation before action.</li><li>Decision briefs are deterministic by default; live LLM narration is optional and never changes numbers.</li></ul></article>
+        <article class="panel"><div class="panel-header"><div><p class="eyebrow">OPERATIONAL RISK</p><h2>Model boundaries</h2></div></div><ul class="boundary"><li>Meta revenue semantics are derived from validated canonical quality flags and surfaced in Data health.</li><li>Platform attribution is the source of truth; Horizon does not claim causal lift.</li><li>Budget changes are conditional forecasts; wide ranges or insufficient calibration require validation before action.</li><li>Decision briefs are deterministic by default; live LLM narration is localhost-only opt-in and never changes numbers.</li></ul></article>
       </section>
     </main>
     <script src="/app.js"></script>

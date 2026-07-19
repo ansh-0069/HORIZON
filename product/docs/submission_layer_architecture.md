@@ -10,6 +10,7 @@ flowchart LR
   R --> P[src.predict]
   P --> I[Protected src inference modules]
   P --> M[pickle/model.pkl]
+  P --> H[pickle/model_manifest.json]
   E --> D[External DATA_DIR]
   P --> O[External OUTPUT_PATH]
 
@@ -20,6 +21,7 @@ flowchart LR
 
   style I fill:#dff5e7,stroke:#107457
   style M fill:#dff5e7,stroke:#107457
+  style H fill:#dff5e7,stroke:#107457
   style A fill:#eaf2ff,stroke:#175ee8
   style X fill:#eaf2ff,stroke:#175ee8
 ```
@@ -28,33 +30,34 @@ flowchart LR
 
 ```text
 .
-├── run.sh                         # protected evaluator entry point
-├── requirements.txt               # NumPy + Pandas only
-├── src/                           # protected, inference-only Python package
-│   ├── canonicalize.py
-│   ├── contracts.py
-│   ├── direct_model.py            # serialized-model feature transform + predict
-│   ├── forecast.py
-│   ├── ingest.py
-│   ├── model.py                   # HorizonModel inference object; no fit method
-│   ├── output_adapter.py
-│   ├── predict.py
-│   └── validate.py
-├── pickle/
-│   └── model.pkl                  # pre-trained evaluator artifact
-└── product/                       # never imported by run.sh
-    ├── app/                       # local HTTP API, ledger, optional OpenAI evidence
-    ├── frontend/                  # browser UI
-    ├── decisioning/               # scenario simulator and budget optimizer
-    ├── training/                  # model fitting and artifact creation
-    ├── evaluation.py              # rolling-origin backtesting
-    ├── scripts/                   # clean-room rehearsal and evaluation CLI
-    ├── tests/
-    ├── demo_data/
-    ├── models/                    # reports
-    ├── output/                    # local outputs and decision ledger
-    ├── docs/                      # implementation truth, model card, reference PDFs
-    └── README.md
+|-- run.sh                         # protected evaluator entry point
+|-- requirements.txt               # NumPy + Pandas only
+|-- src/                           # protected, inference-only Python package
+|   |-- canonicalize.py
+|   |-- contracts.py
+|   |-- direct_model.py            # serialized-model feature transform + predict
+|   |-- forecast.py
+|   |-- ingest.py
+|   |-- model.py                   # HorizonModel inference object; no fit method
+|   |-- output_adapter.py
+|   |-- predict.py
+|   `-- validate.py
+|-- pickle/
+|   |-- model.pkl                  # pre-trained evaluator artifact
+|   `-- model_manifest.json        # SHA-256, version, and provenance integrity pin
+`-- product/                       # never imported by run.sh
+    |-- app/                       # local HTTP API, ledger, optional OpenAI evidence
+    |-- frontend/                  # browser UI
+    |-- decisioning/               # scenario simulator and budget optimizer
+    |-- training/                  # model fitting and artifact creation
+    |-- evaluation.py              # rolling-origin backtesting
+    |-- scripts/                   # clean-room rehearsal and evaluation CLI
+    |-- tests/
+    |-- demo_data/
+    |-- models/                    # reports
+    |-- output/                    # local outputs and decision ledger
+    |-- docs/                      # implementation truth, model card, reference PDFs
+    `-- README.md
 ```
 
 Repository metadata such as `.git/` and `.gitignore` is not part of either runtime layer. The evaluator may provide `DATA_DIR` and `OUTPUT_PATH` as arguments, but the submission guide also requires zero-argument operation. Therefore the committed root `data/` directory is part of the protected path and `run.sh` defaults to `./data`, `./pickle/model.pkl`, and `./output/predictions.csv`. Local prediction/ledger artifacts under `output/` and `product/output/` are gitignored.
@@ -68,16 +71,16 @@ Repository metadata such as `.git/` and `.gitignore` is not part of either runti
 | `src/evaluate.py` | `product/evaluation.py` | Backtests retrain historical models and are product/release tooling. |
 | `src/scenario.py`, `src/optimizer.py` | `product/decisioning/` | Scenario planning is product decision support, not required to emit scorer predictions. |
 | `scripts/`, `tests/` | `product/scripts/`, `product/tests/` | Release support and regression tests remain available without expanding inference imports. |
-| `dataset/`, product model reports, product outputs, and documentation | `product/` equivalents | These are demo/release artifacts, not evaluator runtime inputs. Root `data/` and `pickle/model.pkl` remain protected because the default runner requires them. |
+| `dataset/`, product model reports, product outputs, and documentation | `product/` equivalents | These are demo/release artifacts, not evaluator runtime inputs. Root `data/`, `pickle/model.pkl`, and `pickle/model_manifest.json` remain protected because the default runner requires them. |
 | `.env.local` | `product/.env.local` | OpenAI credentials are physically outside the protected path. |
 
 ## Dependency Isolation Strategy
 
 ### Protected submission path
 
-- Root `data/` contains schema-compatible samples and is the default `DATA_DIR`; `pickle/model.pkl` is the default model artifact.
+- Root `data/` contains schema-compatible samples and is the default `DATA_DIR`; `pickle/model.pkl` is the default model artifact and its sibling `pickle/model_manifest.json` is the immutable integrity/provenance pin.
 - `run.sh` accepts zero to three positional arguments (`DATA_DIR MODEL_PATH OUTPUT_PATH`) and executes only `python -m src.predict`.
-- `src.predict` reads CSV files, validates and canonicalizes them, unpickles `HorizonModel`, builds forecasts, validates the output contract, and atomically writes CSV.
+- `src.predict` reads CSV files, validates and canonicalizes them, verifies the sibling manifest's SHA-256, version, and fingerprints before unpickling `HorizonModel`, builds forecasts, validates the output contract, and atomically writes CSV.
 - `src/` imports only the Python standard library, `numpy`, `pandas`, and other `src` modules.
 - `requirements.txt` pins only `numpy==2.3.5` and `pandas==3.0.1`.
 - `src.model.HorizonModel` has no training method. Model creation lives under `product.training`.

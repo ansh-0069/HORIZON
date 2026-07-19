@@ -31,8 +31,36 @@ SOURCE_REQUIRED_COLUMNS = {
     },
 }
 
+# Campaign identifiers are opaque external keys.  They must be read as text so
+# a leading zero or an identifier larger than an integer type survives source
+# ingestion, optional metadata matching, and submission serialization.
+SOURCE_CAMPAIGN_ID_COLUMNS = {
+    "google_ads": "campaign_id",
+    "microsoft_ads": "CampaignId",
+    "meta_ads": "campaign_id",
+}
+
+# The protected submission schema has one deliberately fixed revenue measure
+# per source.  Optional semantic metadata is an attestation of these mappings,
+# not a dynamic remapping mechanism.  Supporting a new source measure requires
+# an explicit connector/schema change rather than silently forecasting a
+# different field than the one declared to a planner.
+CANONICAL_REVENUE_FIELDS = {
+    "google_ads": "metrics_conversions_value",
+    "microsoft_ads": "Revenue",
+    "meta_ads": "conversion",
+}
+
 TAXONOMY_FILENAME = "campaign_taxonomy.csv"
 TAXONOMY_REQUIRED_COLUMNS = {"source_system", "source_campaign_id", "campaign_type"}
+TAXONOMY_SUPPORTED_SOURCES = frozenset({"meta_ads"})
+
+# These review fields are deliberately optional so legacy/evaluator uploads
+# remain usable.  When present, they make the provenance of planner-facing
+# metadata explicit instead of treating the mere presence of a CSV as an
+# approval signal.
+REVIEW_STATUS_COLUMN = "review_status"
+REVIEW_STATUSES = frozenset({"reviewed", "unreviewed"})
 
 # Optional review artifact for a planner upload.  The evaluator can continue
 # with the three supplied platform files alone, but a real cross-channel plan

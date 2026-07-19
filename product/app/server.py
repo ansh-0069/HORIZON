@@ -14,6 +14,22 @@ from product.app.service import PlannerService
 PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PRODUCT_ROOT.parent
 LOGGER = logging.getLogger("horizon.planner")
+LOCAL_ONLY_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def validate_live_llm_host(host: str, enabled: bool) -> None:
+    """Prevent the optional network narrator from being exposed beyond localhost."""
+    if enabled and host.strip().lower() not in LOCAL_ONLY_HOSTS:
+        raise ValueError(
+            "--enable-live-llm is allowed only with --host 127.0.0.1, ::1, or localhost"
+        )
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    # Python's json parser accepts NaN/Infinity by default. The service rejects
+    # non-finite values too, but reject them at the HTTP boundary for a clearer
+    # contract and to avoid accidentally accepting non-standard JSON.
+    raise ValueError(f"Non-finite JSON value is not allowed: {value}")
 
 
 def make_handler(service: PlannerService):
@@ -59,7 +75,10 @@ def make_handler(service: PlannerService):
                 length = int(self.headers.get("Content-Length", "0"))
                 if length <= 0 or length > 100_000:
                     raise ValueError("Request body must be a JSON object smaller than 100 KB")
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                payload = json.loads(
+                    self.rfile.read(length).decode("utf-8"),
+                    parse_constant=_reject_nonstandard_json_constant,
+                )
                 if not isinstance(payload, dict):
                     raise ValueError("Request body must be a JSON object")
                 if path == "/api/optimize":
@@ -73,8 +92,20 @@ def make_handler(service: PlannerService):
                 self._json(HTTPStatus.OK, result)
             except (ValueError, json.JSONDecodeError) as exc:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": {"code": "SCENARIO_INVALID", "message": str(exc)}})
-            except Exception as exc:  # pragma: no cover - protected boundary
-                self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": {"code": "FORECAST_FAILED", "message": str(exc)}})
+            except Exception:  # pragma: no cover - protected boundary
+                # Preserve diagnostics for the local operator without exposing
+                # filesystem paths, model internals, or provider details to a
+                # browser/API client.
+                LOGGER.exception("planner_api_failure endpoint=%s", path)
+                self._json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "error": {
+                            "code": "FORECAST_FAILED",
+                            "message": "The planner could not complete this request. Review the local server log for details.",
+                        }
+                    },
+                )
 
         def log_message(self, fmt: str, *args) -> None:
             # Standard request logging avoids ad-hoc prints while retaining a
@@ -90,11 +121,25 @@ def main() -> None:
     parser.add_argument("--model", type=Path, default=PROJECT_ROOT / "pickle" / "model.pkl")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=4173)
+    parser.add_argument(
+        "--enable-live-llm",
+        action="store_true",
+        help="Allow the optional live narrator for explicit API requests on localhost only.",
+    )
     args = parser.parse_args()
+    try:
+        validate_live_llm_host(args.host, args.enable_live_llm)
+    except ValueError as exc:
+        parser.error(str(exc))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    service = PlannerService(args.data_dir, args.model)
+    service = PlannerService(args.data_dir, args.model, allow_live_llm=args.enable_live_llm)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(service))
-    LOGGER.info("planner_server_started host=%s port=%s", args.host, args.port)
+    LOGGER.info(
+        "planner_server_started host=%s port=%s live_llm_enabled=%s",
+        args.host,
+        args.port,
+        args.enable_live_llm,
+    )
     server.serve_forever()
 
 

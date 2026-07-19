@@ -25,8 +25,35 @@ class DirectRidgeModel:
     residual_p10: float
     residual_p90: float
     sample_count: int
+    residual_p50: float = 0.0
     calibration_sample_count: int = 0
     uncertainty_method: str = "temporal_holdout_residual_quantiles"
+
+    def unknown_category_values(self, frame: pd.DataFrame) -> dict[str, tuple[str, ...]]:
+        """Return feature-category values not represented by this fitted model.
+
+        A one-hot ridge design otherwise encodes an unseen category as an
+        all-zero vector.  That is numerically valid but semantically unsafe:
+        it makes an unsupported campaign look like the reference category.
+        Callers use this explicit signal to fall back to the conservative
+        response curve and disclose the out-of-vocabulary condition.
+        """
+        unknown: dict[str, tuple[str, ...]] = {}
+        for column, values in self.categories.items():
+            if column not in frame.columns:
+                unknown[column] = ("<missing>",)
+                continue
+            # Values may have been materialized as numpy string scalars while
+            # the incoming canonical frame contains Python strings (or vice
+            # versa). Normalize both sides before comparison so a supported
+            # category never triggers the conservative OOV fallback merely
+            # because of its scalar representation.
+            observed = {str(value) for value in frame[column].dropna().astype(str)}
+            supported = {str(value) for value in values}
+            unsupported = tuple(sorted(observed - supported))
+            if unsupported:
+                unknown[column] = unsupported
+        return unknown
 
     @staticmethod
     def _design(frame: pd.DataFrame, categories: dict[str, tuple[str, ...]], mean: np.ndarray | None = None, scale: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -44,10 +71,13 @@ class DirectRidgeModel:
         return np.column_stack(parts), mean, scale
 
     def predict(self, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        # Direct callers retain the established numeric interface.  HorizonModel
+        # performs the compatibility check before invoking this method so the
+        # protected forecast path never silently scores an all-zero OOV design.
         x, _, _ = self._design(frame, self.categories, np.asarray(self.numeric_mean), np.asarray(self.numeric_scale))
         predicted_log = x @ np.asarray(self.coefficients)
         p10 = np.maximum(0.0, np.expm1(predicted_log + self.residual_p10))
-        p50 = np.maximum(0.0, np.expm1(predicted_log))
+        p50 = np.maximum(0.0, np.expm1(predicted_log + float(getattr(self, "residual_p50", 0.0))))
         p90 = np.maximum(0.0, np.expm1(predicted_log + self.residual_p90))
         return p10, p50, p90
 

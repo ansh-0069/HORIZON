@@ -30,6 +30,7 @@
     90
   ],
   "model_unchanged": true,
+  "model_manifest_enforced": true,
   "dependency_audit": {
     "third_party_packages": [
       "numpy",
@@ -41,6 +42,6 @@
   },
   "runner_messages": [
     "Wrote 162 forecast rows to <isolated-workspace>\\predictions.csv",
-    "Warnings: taxonomy or source-attributed revenue semantics require documented review"
+    "Warnings: campaign taxonomy is incomplete or not explicitly reviewed;Meta revenue semantics require documented review;source semantics manifest absent or unreviewed: currency, timezone, and attribution comparability are unreviewed"
   ]
 }

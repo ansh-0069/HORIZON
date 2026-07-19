@@ -10,11 +10,6 @@ from pathlib import Path
 
 from product.app.evidence import OpenAIEvidenceClient, build_evidence_packet, load_evidence_config
 from product.app.service import PlannerService
-from src.canonicalize import canonicalize
-from src.forecast import build_forecast
-from src.ingest import read_source_files
-from src.predict import load_model
-from src.validate import validate_canonical
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,13 +26,14 @@ def main() -> None:
     config = load_evidence_config()
     if config is None:
         raise SystemExit("No optional OpenAI evidence configuration is available")
-    canonical = canonicalize(read_source_files(args.data_dir))
-    validate_canonical(canonical).raise_if_blocking()
-    model = load_model(args.model)
-    forecast = build_forecast(model, canonical, args.horizon)
-    overall = forecast[forecast["level"] == "overall"].iloc[0]
-    evidence = PlannerService._evidence(forecast, model.target_roas)
-    brief = OpenAIEvidenceClient(config).generate(build_evidence_packet(evidence, overall.to_dict()))
+    # This optional verifier uses the same integrity-checked artifact loading,
+    # persisted-calibration decision gating, and sealed evidence construction as
+    # the local planner. It is not part of the protected evaluator path.
+    service = PlannerService(args.data_dir, args.model, allow_live_llm=True)
+    forecast = service.forecast({"horizon_days": args.horizon})
+    overall = forecast["overall"][0]
+    evidence = forecast["evidence"]
+    brief = OpenAIEvidenceClient(config).generate(build_evidence_packet(evidence, overall))
     print(
         {
             "status": "passed",
