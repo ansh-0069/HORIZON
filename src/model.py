@@ -22,6 +22,38 @@ class HorizonModel:
         """Return the source-qualified campaign identity used by scenarios."""
         return f"{source_system}:{campaign_id}"
 
+    @staticmethod
+    def _seasonal_default_budget_multiplier(
+        canonical: pd.DataFrame,
+        as_of: pd.Timestamp,
+        horizon_days: int,
+    ) -> float:
+        """Estimate a conservative portfolio plan when no future budget is supplied.
+
+        The evaluator provides historical performance, not a future media plan.
+        A 90-day plan based only on the preceding 28 days can carry a holiday
+        spike into normal trading months. For that horizon only, compare the
+        future calendar-month mix with the recent daily delivery rate. This is
+        a deterministic *budget default*, not a revenue feature or an override
+        of a planner-provided scenario.
+        """
+        if horizon_days != 90:
+            return 1.0
+        recent_start = as_of - pd.Timedelta(days=27)
+        recent = canonical[(canonical["date"] >= recent_start) & (canonical["date"] <= as_of)]
+        recent_daily_spend = float(recent["spend"].sum()) / 28.0
+        if recent_daily_spend <= 0:
+            return 1.0
+        portfolio_daily = canonical[canonical["date"] <= as_of].groupby("date")["spend"].sum()
+        if portfolio_daily.empty:
+            return 1.0
+        month_daily_mean = portfolio_daily.groupby(portfolio_daily.index.month).mean()
+        future_dates = pd.date_range(as_of + pd.Timedelta(days=1), periods=horizon_days, freq="D")
+        seasonal_daily_spend = sum(float(month_daily_mean.get(date.month, recent_daily_spend)) for date in future_dates) / horizon_days
+        # Protect sparse or regime-shifted inputs while still allowing a clear
+        # seasonal correction when historical coverage supports it.
+        return max(0.10, min(2.00, seasonal_daily_spend / recent_daily_spend))
+
     def direct_quantiles(
         self,
         history: pd.DataFrame,
@@ -45,6 +77,7 @@ class HorizonModel:
         recent = canonical[(canonical["date"] >= window_start) & (canonical["date"] <= as_of)].copy()
         future_dates = pd.date_range(as_of + pd.Timedelta(days=1), periods=horizon_days, freq="D")
         seasonal_factor = sum(self.month_roas_factors.get(int(date.month), 1.0) for date in future_dates) / horizon_days
+        default_budget_multiplier = self._seasonal_default_budget_multiplier(canonical, as_of, horizon_days)
         group_keys = ["source_system", "source_campaign_id", "channel", "campaign_type", "campaign_name"]
         source_counts = canonical.groupby("source_campaign_id", dropna=False)["source_system"].nunique()
         # Reject ambiguity before excluding inactive campaigns. Otherwise an
@@ -82,22 +115,28 @@ class HorizonModel:
             # product callers must use source-qualified campaign keys.
             if override is None and str(campaign_id) in budget_overrides:
                 override = budget_overrides[str(campaign_id)]
-            planned_budget = float(override) if override is not None else max(0.0, daily_spend * horizon_days)
+            baseline_budget = max(0.0, daily_spend * horizon_days * default_budget_multiplier)
+            planned_budget = float(override) if override is not None else baseline_budget
             support = max(historic_spend / max(int(history["date"].nunique()), 1) * horizon_days, 1.0)
             extrapolation = planned_budget > 1.5 * support
             sigma = self.global_log_sigma * (1.0 + (1.0 - reliability) + (0.55 if extrapolation else 0.0))
             # A normalized logarithmic response curve preserves the baseline forecast
             # at the current plan while making incremental budget progressively less productive.
-            baseline_budget = max(daily_spend * horizon_days, 1.0)
-            saturation_scale = max(baseline_budget * 1.5, 1.0)
-            normalization = baseline_budget / (saturation_scale * math.log1p(baseline_budget / saturation_scale))
+            curve_baseline_budget = max(baseline_budget, 1.0)
+            saturation_scale = max(curve_baseline_budget * 1.5, 1.0)
+            normalization = curve_baseline_budget / (saturation_scale * math.log1p(curve_baseline_budget / saturation_scale))
             revenue_p50 = max(0.0, roas * saturation_scale * math.log1p(planned_budget / saturation_scale) * normalization)
-            direct_quantiles = self.direct_quantiles(history, str(channel), str(campaign_type), as_of, horizon_days, planned_budget)
-            if direct_quantiles is not None:
-                revenue_p10, revenue_p50, revenue_p90 = direct_quantiles
+            if planned_budget <= 0:
+                # A user who sets a campaign plan to zero must never receive a
+                # positive paid-media revenue forecast from a model intercept.
+                revenue_p10 = revenue_p50 = revenue_p90 = 0.0
             else:
-                revenue_p10 = revenue_p50 * math.exp(-1.28155 * sigma)
-                revenue_p90 = revenue_p50 * math.exp(1.28155 * sigma)
+                direct_quantiles = self.direct_quantiles(history, str(channel), str(campaign_type), as_of, horizon_days, planned_budget)
+                if direct_quantiles is not None:
+                    revenue_p10, revenue_p50, revenue_p90 = direct_quantiles
+                else:
+                    revenue_p10 = revenue_p50 * math.exp(-1.28155 * sigma)
+                    revenue_p90 = revenue_p50 * math.exp(1.28155 * sigma)
             spend_p10, spend_p90 = planned_budget * 0.90, planned_budget * 1.05
             flags = []
             if active_days < self.min_history_days:
@@ -106,6 +145,8 @@ class HorizonModel:
                 flags.append("budget_extrapolation")
             if planned_budget > 1.25 * baseline_budget:
                 flags.append("diminishing_returns")
+            if override is None and default_budget_multiplier != 1.0:
+                flags.append("seasonally_adjusted_baseline_budget")
             rows.append({
                 "level": "campaign", "channel": channel, "campaign_type": campaign_type,
                 "campaign_id": str(campaign_id), "campaign_key": campaign_key, "campaign_name": campaign_name,

@@ -41,12 +41,15 @@ class PlannerService:
         return clean.to_dict(orient="records")
 
     def data_health(self) -> dict[str, Any]:
+        meta = self.canonical[self.canonical["source_system"] == "meta_ads"]
+        unknown_meta_types = int(meta["campaign_type"].eq("Generic").sum()) if not meta.empty else 0
         return {
             "status": "warning" if self.quality.warnings else "healthy",
             "rows": int(len(self.canonical)),
             "campaigns": int(self.canonical[["source_system", "source_campaign_id"]].drop_duplicates().shape[0]),
             "date_start": str(self.canonical["date"].min().date()),
             "date_end": str(self.canonical["date"].max().date()),
+            "meta_taxonomy_unknown_rows": unknown_meta_types,
             "warnings": self.quality.warnings,
             "blockers": self.quality.blockers,
         }

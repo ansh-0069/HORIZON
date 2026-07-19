@@ -41,6 +41,15 @@ class HorizonPipelineTests(unittest.TestCase):
         self.assertGreater(google["spend"].sum(), 1.0)
         self.assertLess(google["spend"].sum(), 3_000_000.0)
 
+    def test_meta_campaign_names_receive_operational_taxonomy(self) -> None:
+        meta = self.canonical[self.canonical["source_system"] == "meta_ads"]
+        self.assertFalse(meta.empty)
+        self.assertIn("META_PROSPECTING", set(meta["campaign_type"]))
+        self.assertIn("META_REMARKETING", set(meta["campaign_type"]))
+        self.assertIn("META_REMARKETING_DPA", set(meta["campaign_type"]))
+        explicit = meta[meta["campaign_name"].str.contains("prospecting|remarketing|dpa", case=False, na=False)]
+        self.assertNotIn("Generic", set(explicit["campaign_type"]))
+
     def test_quality_has_no_blockers(self) -> None:
         report = validate_canonical(self.canonical)
         self.assertEqual(report.blockers, [])
@@ -71,6 +80,21 @@ class HorizonPipelineTests(unittest.TestCase):
         self.assertEqual(set(simulated["horizon_days"]), {30})
         with self.assertRaises(ValueError):
             simulate_budget_plan(self.model, self.canonical, 30, {campaign_id: -1.0})
+
+    def test_zero_budget_scenario_cannot_emit_paid_media_revenue(self) -> None:
+        baseline = build_forecast(self.model, self.canonical, 30)
+        campaign = baseline[baseline["level"] == "campaign"].iloc[0]
+        scenario = simulate_budget_plan(self.model, self.canonical, 30, {str(campaign["campaign_key"]): 0.0})
+        zeroed = scenario[(scenario["level"] == "campaign") & (scenario["campaign_key"] == campaign["campaign_key"])].iloc[0]
+        self.assertEqual(float(zeroed["planned_budget"]), 0.0)
+        self.assertEqual(float(zeroed["predicted_revenue_p10"]), 0.0)
+        self.assertEqual(float(zeroed["predicted_revenue_p50"]), 0.0)
+        self.assertEqual(float(zeroed["predicted_revenue_p90"]), 0.0)
+
+    def test_ninety_day_default_plan_is_seasonally_marked(self) -> None:
+        forecast = build_forecast(self.model, self.canonical, 90)
+        leaves = forecast[forecast["level"] == "campaign"]
+        self.assertTrue(leaves["quality_flags"].str.contains("seasonally_adjusted_baseline_budget", na=False).any())
 
     def test_pickle_and_submission_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

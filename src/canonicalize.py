@@ -8,7 +8,20 @@ from src.contracts import CANONICAL_COLUMNS
 
 def _meta_campaign_type(name: object) -> tuple[str, str]:
     text = str(name or "").lower()
-    for needle, label in (("shopping", "Shopping"), ("search", "Search"), ("performance", "PerformanceMax"), ("video", "Video"), ("display", "Display")):
+    # Meta exports in the supplied schema do not include a campaign-type field.
+    # Prefer reviewed taxonomy when available, then infer only explicit naming
+    # conventions. The ordering keeps DPA distinct from generic remarketing.
+    for needle, label in (
+        ("dpa", "META_REMARKETING_DPA"),
+        ("dynamic product", "META_REMARKETING_DPA"),
+        ("remarketing", "META_REMARKETING"),
+        ("retarget", "META_REMARKETING"),
+        ("prospecting", "META_PROSPECTING"),
+        ("acquisition", "META_PROSPECTING"),
+        ("shopping", "META_SHOPPING"),
+        ("video", "META_VIDEO"),
+        ("display", "META_DISPLAY"),
+    ):
         if needle in text:
             return label, "meta_campaign_type_inferred"
     return "Generic", "meta_campaign_type_unknown"

@@ -100,7 +100,7 @@ risk_score, quality_flags, model_version
 
 ## Model Details
 
-The serialized `HorizonModel` performs deterministic local inference. It uses a pre-trained direct ridge model per 30/60/90-day horizon with budget, trend, seasonality, channel, and campaign-type features. P10/P90 are chronological holdout residual quantiles; they are not causal guarantees or conformal intervals. Spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels. See [current implementation truth](product/docs/current_implementation.md).
+The serialized `HorizonModel` performs deterministic local inference. It uses a pre-trained direct ridge model per 30/60/90-day horizon with budget, trend, seasonality, channel, and campaign-type features. When no future budget is provided, the 90-day baseline plan is seasonally adjusted from historical monthly delivery; an explicit scenario budget always takes precedence. P10/P90 are chronological holdout residual quantiles; they are not causal guarantees or conformal intervals. Spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels. See the [current implementation truth](product/docs/current_implementation.md) and [model card](product/docs/model_card.md).
 
 The model artifact is loaded read-only. No fitting, hyperparameter search, feature-store write, or artifact mutation occurs during execution.
 
@@ -122,6 +122,7 @@ The output adapter separately rejects missing required output fields, null/non-f
 - Input files represent daily campaign statistics in a consistent currency and attribution convention.
 - Campaign IDs are stable within each source system.
 - Historical performance is sufficiently representative of the requested forecast period.
+- Meta campaign names are deterministically classified as prospecting, remarketing, or DPA when those explicit terms are present; provide `campaign_taxonomy.csv` for reviewed overrides.
 - Meta's `conversion` field is treated as supplied platform-attributed revenue and conversions in this schema; confirm that business meaning before production use.
 - The bundled model is compatible with the input data and requested 30/60/90-day horizons.
 
@@ -138,6 +139,23 @@ The command fails closed with a non-zero exit status and an actionable `ERROR: o
 - Execution has no time-dependent API calls, random sampling, or network access.
 - Output schema and ordering are versioned in `src/output_adapter.py`.
 - The repository includes an evaluator rehearsal at `product/scripts/rehearse_submission.py`; it is optional and not imported by `run.sh`.
+- GitHub Actions recreates the Python 3.11 dependency install and runs the exact evaluator command on every `main` push.
+
+### Final evaluator-contract gate
+
+The supplied guide does not include the scorer header. Once organizers provide it, run the exact evaluator command, save the official one-line header fixture, then verify it without guessing:
+
+```bash
+python -m product.scripts.verify_evaluator_contract \
+  --predictions ./output/predictions.csv \
+  --official-header ./path/to/organizer_predictions_header.csv
+```
+
+Immediately before sharing the repository URL, also require that the reviewed local branch has been pushed:
+
+```bash
+python -m product.scripts.release_check --strict --require-upstream-sync
+```
 
 ## Troubleshooting
 

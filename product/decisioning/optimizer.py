@@ -66,6 +66,7 @@ def recommend_allocation(
 
     allocations = {str(row.campaign_key): 0.0 for row in leaves.itertuples()}
     channel_allocated: defaultdict[str, float] = defaultdict(float)
+    target_relaxed = False
     by_channel = {channel: group.copy() for channel, group in leaves.groupby("channel")}
     step = max(100.0, round(total_budget / max(increments, 1) / 100.0) * 100.0)
     as_of = canonical["date"].max()
@@ -86,7 +87,9 @@ def recommend_allocation(
             history, str(row.channel), str(row.campaign_type), as_of, horizon_days, next_budget,
         )
         if current_quantiles is not None and next_quantiles is not None:
-            current_revenue = current_quantiles[1]
+            # A direct model may have an intercept. A zero media plan must
+            # still represent zero paid-media revenue in the allocator.
+            current_revenue = 0.0 if current <= 1e-9 else current_quantiles[1]
             next_revenue = next_quantiles[1]
             return max(0.0, (next_revenue - current_revenue) / max(addition, 1e-9)), next_revenue / max(next_budget, 1e-9)
         return (
@@ -122,8 +125,7 @@ def recommend_allocation(
         if unallocated > 1e-6:
             raise ValueError(f"Scenario infeasible: {channel} minimum exceeds campaign support cap")
 
-    remaining = total_budget - sum(allocations.values())
-    while remaining > 1e-6:
+    def candidates_for_remaining(remaining_budget: float, enforce_target: bool) -> list[tuple[float, str, str, float, float]]:
         candidates = []
         for row in leaves.itertuples():
             campaign_id = str(row.campaign_key)
@@ -133,13 +135,25 @@ def recommend_allocation(
             channel_cap = maximums.get(channel, math.inf)
             if current + 1e-6 >= cap or channel_allocated[channel] + 1e-6 >= channel_cap:
                 continue
-            candidate_addition = min(step, remaining, cap - current, channel_cap - channel_allocated[channel])
+            candidate_addition = min(step, remaining_budget, cap - current, channel_cap - channel_allocated[channel])
             if candidate_addition <= 1e-6:
                 continue
             marginal, candidate_roas = marginal_response(row, current, candidate_addition)
             if target_roas is not None and candidate_roas < target_roas:
+                if enforce_target:
+                    continue
+                # The caller records that a hard target constraint had to be
+                # relaxed to return a feasible full-budget plan.
                 marginal *= 0.55
             candidates.append((marginal, campaign_id, channel, cap, channel_cap))
+        return candidates
+
+    remaining = total_budget - sum(allocations.values())
+    while remaining > 1e-6:
+        candidates = candidates_for_remaining(remaining, enforce_target=target_roas is not None)
+        if not candidates and target_roas is not None:
+            candidates = candidates_for_remaining(remaining, enforce_target=False)
+            target_relaxed = bool(candidates)
         if not candidates:
             raise ValueError("Scenario infeasible: total budget exceeds all campaign and channel caps")
         _, campaign_id, channel, cap, channel_cap = max(candidates, key=lambda item: (item[0], item[1]))
@@ -160,6 +174,7 @@ def recommend_allocation(
         explanation=(
             "Allocation uses discrete marginal returns from the same direct-ridge response used by scenario forecasts "
             "when available, with a documented fallback curve, campaign support caps, channel constraints, and a "
-            "ROAS-target penalty. The selected allocation is reforecast through the shared probabilistic model."
+            f"{'controlled ROAS-target relaxation because no fully feasible allocation met the guardrail' if target_relaxed else 'hard ROAS guardrail while feasible'}. "
+            "The selected allocation is reforecast through the shared probabilistic model."
         ),
     )

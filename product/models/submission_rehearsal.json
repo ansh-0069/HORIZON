@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "rows": 156,
+  "rows": 162,
   "columns": [
     "forecast_id",
     "horizon_days",
@@ -40,7 +40,7 @@
     "training_calls_in_predict": false
   },
   "runner_messages": [
-    "Wrote 156 forecast rows to <isolated-workspace>\\predictions.csv",
+    "Wrote 162 forecast rows to <isolated-workspace>\\predictions.csv",
     "Warnings: taxonomy or source-attributed revenue semantics require documented review"
   ]
 }

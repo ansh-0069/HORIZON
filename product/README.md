@@ -47,14 +47,21 @@ Run repository-controlled submission release gates:
 python -m product.scripts.release_check --strict
 ```
 
+Verify that the local revision is pushed before submitting:
+
+```bash
+python -m product.scripts.release_check --strict --require-upstream-sync
+```
+
 ## Optional OpenAI narrative
 
 Only the **Generate grounded AI brief** UI action can use `OPENAI_API_KEY`; it reads `product/.env.local`. Forecasting, optimization, training, tests, and the submission runner do not need a key or internet connection. If the key, credits, or network are unavailable, the product UI falls back to deterministic evidence.
 
+The API key is deliberately not a submission dependency. Before a live demo, verify provider quota and the selected model with `python -m product.scripts.verify_evidence_narrative`; do not claim a live AI narrative if that explicit smoke test cannot complete.
+
 ## Data and artifacts
 
-- `demo_data/`: product demo data.
-- `supplied_data/`: original supplied CSVs retained for local testing.
+- `demo_data/`: full history used by the planner UI, training, and evaluation.
 - `models/`: backtest and rehearsal reports.
 - `output/`: local product outputs and decision ledger; never used by the evaluator.
-- `docs/`: solution plans, release report, and the supplied hackathon PDFs.
+- `docs/`: implementation truth, model card, architecture notes, and hackathon reference PDFs.

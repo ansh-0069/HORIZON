@@ -90,11 +90,46 @@ def check() -> list[str]:
     return failures
 
 
+def upstream_sync_failure() -> str | None:
+    """Return a release-blocking message when local HEAD is not publishable.
+
+    The organizer clones the submitted remote URL, so a clean working tree is
+    not sufficient: the branch must also contain the reviewed commits.
+    """
+    upstream = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if upstream.returncode != 0:
+        return "No upstream branch is configured; cannot verify that the submitted repository contains HEAD"
+    ahead = subprocess.run(
+        ["git", "rev-list", "--count", "@{u}..HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ahead.returncode != 0:
+        return "Unable to compare local HEAD with its upstream branch"
+    count = int(ahead.stdout.strip() or "0")
+    if count:
+        return f"Local HEAD is {count} commit(s) ahead of {upstream.stdout.strip()}; push before submitting"
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate repository-controlled submission-guide requirements")
     parser.add_argument("--strict", action="store_true", help="Return a non-zero status when any release gate fails")
+    parser.add_argument("--require-upstream-sync", action="store_true", help="Fail when local HEAD has not been pushed to its configured upstream")
     args = parser.parse_args()
     failures = check()
+    if args.require_upstream_sync:
+        sync_failure = upstream_sync_failure()
+        if sync_failure:
+            failures.append(sync_failure)
     if failures:
         print("Release check failed:", file=sys.stderr)
         for failure in failures:

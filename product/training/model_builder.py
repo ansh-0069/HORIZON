@@ -21,7 +21,7 @@ def fit_horizon_model(canonical: pd.DataFrame, train_direct: bool = True) -> Hor
     factors = (monthly["revenue"] / monthly["spend"].clip(lower=1e-9) / roas).clip(0.55, 1.45)
     direct_models = {horizon: model for horizon in (30, 60, 90) if (model := fit_direct_ridge(canonical, horizon)) is not None} if train_direct else {}
     return HorizonModel(
-        "horizon-direct-ridge-v2" if direct_models else "horizon-statistical-v4",
+        "horizon-direct-ridge-v3-seasonal-plan" if direct_models else "horizon-statistical-v5-seasonal-plan",
         float(roas),
         max(0.20, min(sigma, 1.25)),
         {int(month): float(value) for month, value in factors.items()},

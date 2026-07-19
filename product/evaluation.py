@@ -82,8 +82,8 @@ def rolling_origin_backtest(canonical: pd.DataFrame, horizon_days: int, folds: i
 def evaluate_all_horizons(canonical: pd.DataFrame, folds: int = 3) -> dict[str, Any]:
     horizons = (30, 60, 90)
     return {
-        "model_family": "horizon-direct-ridge-v2",
-        "baseline_model_family": "horizon-statistical-v4",
+        "model_family": "horizon-direct-ridge-v3-seasonal-plan",
+        "baseline_model_family": "horizon-statistical-v5-seasonal-plan",
         "data_fingerprint": canonical_fingerprint(canonical),
         "horizons": [rolling_origin_backtest(canonical, horizon, folds, train_direct=True) for horizon in horizons],
         "baseline_horizons": [rolling_origin_backtest(canonical, horizon, folds, train_direct=False) for horizon in horizons],
@@ -93,5 +93,5 @@ def evaluate_all_horizons(canonical: pd.DataFrame, folds: int = 3) -> dict[str, 
 def write_evaluation_report(canonical: pd.DataFrame, output: Path, folds: int = 3) -> dict[str, Any]:
     report = evaluate_all_horizons(canonical, folds)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
     return report

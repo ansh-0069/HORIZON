@@ -13,18 +13,38 @@ function renderHealth(health) {
     <div class="health-row"><span>Source records</span><strong>${number.format(health.rows)}</strong></div>
     <div class="health-row"><span>Campaigns</span><strong>${number.format(health.campaigns)}</strong></div>
     <div class="health-row"><span>Coverage</span><strong>${health.date_start} - ${health.date_end}</strong></div>
+    <div class="health-row"><span>Unclassified Meta rows</span><strong>${number.format(health.meta_taxonomy_unknown_rows || 0)}</strong></div>
     <div class="health-row"><span>Gate status</span><strong class="badge ${health.status === 'warning' ? 'warn' : ''}">${health.status}</strong></div>
     ${health.warnings.length ? `<ul class="warning-list">${health.warnings.map((item) => `<li>${item}</li>`).join('')}</ul>` : ''}`;
 }
 
 function renderTrust(trust) {
   const baseline = Object.fromEntries((trust.baseline_horizons || []).map((item) => [item.horizon_days, item]));
-  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; const calibration = item.median_calibration_samples ? ` Temporal holdout residuals: median ${number.format(item.median_calibration_samples)} samples.` : ''; const nominal = Math.round((item.nominal_interval_coverage || 0.8) * 100); return `<p><strong>${item.horizon_days}:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% observed coverage for a nominal ${nominal}% P10-P90 interval across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.${calibration}</p>`; }).join('');
+  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; const calibration = item.median_calibration_samples ? ` Temporal holdout residuals: median ${number.format(item.median_calibration_samples)} samples.` : ''; const nominal = Math.round((item.nominal_interval_coverage || 0.8) * 100); const caution = item.folds < 5 ? ' Small fold count: treat coverage as directional, not a guarantee.' : ''; return `<p><strong>${item.horizon_days} days:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% observed coverage for a nominal ${nominal}% P10-P90 interval across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.${calibration}${caution}</p>`; }).join('');
   byId('trust').innerHTML = `<div class="trust-summary"><h3>Rolling-origin backtest</h3>${lines}</div>`;
 }
 
 function renderChannels(channels) {
   byId('channels').innerHTML = `<table><thead><tr><th>Channel</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">ROAS P50</th><th class="number">Guardrail</th></tr></thead><tbody>${channels.map((row) => `<tr><td>${row.channel}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td class="number">${Math.round(row.probability_roas_above_target * 100)}%</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderCampaignTypes(types) {
+  byId('campaign-types').innerHTML = `<table><thead><tr><th>Channel / type</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">P10–P90</th><th class="number">ROAS P50</th></tr></thead><tbody>${types.map((row) => `<tr><td><strong>${escapeHtml(row.channel)}</strong><br><span class="table-muted">${escapeHtml(row.campaign_type)}</span></td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} – ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderCampaigns(campaigns) {
+  const priority = [...campaigns].sort((left, right) => Number(right.predicted_revenue_p50) - Number(left.predicted_revenue_p50)).slice(0, 10);
+  byId('campaigns').innerHTML = `<table><thead><tr><th>Campaign</th><th>Type</th><th class="number">Budget</th><th class="number">Revenue P10–P90</th><th class="number">ROAS P50</th><th>Risk flags</th></tr></thead><tbody>${priority.map((row) => `<tr><td><strong>${escapeHtml(row.campaign_name)}</strong><br><span class="table-muted">${escapeHtml(row.channel)}</span></td><td>${escapeHtml(row.campaign_type)}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} – ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td>${escapeHtml(row.quality_flags || 'none')}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderAllocation(optimization) {
+  const container = byId('allocation');
+  if (!optimization) {
+    container.innerHTML = `<p class="allocation-empty">Run <strong>Recommend allocation</strong> to allocate the entered total budget under campaign support caps and channel constraints.</p>`;
+    return;
+  }
+  const entries = Object.entries(optimization.campaign_budgets || {}).sort(([, left], [, right]) => Number(right) - Number(left)).slice(0, 8);
+  container.innerHTML = `<p class="allocation-status"><strong>${escapeHtml(optimization.status)}</strong> — ${escapeHtml(optimization.explanation)}</p><ol class="allocation-list">${entries.map(([campaign, budget]) => `<li><span>${escapeHtml(campaign)}</span><strong>${formatMoney(budget)}</strong></li>`).join('')}</ol>`;
 }
 
 function renderEvidence(evidence) {
@@ -52,7 +72,7 @@ function render(response, initializing=false) {
   byId('probability').textContent = `${Math.round(overall.probability_roas_above_target * 100)}%`;
   byId('risk').textContent = `Risk score: ${number.format(overall.risk_score)} / 100`;
   byId('decision').textContent = response.evidence.decision.replaceAll('_', ' ');
-  renderChannels(response.channels); renderEvidence(response.evidence); renderHealth(response.data_health);
+  renderChannels(response.channels); renderCampaignTypes(response.campaign_types); renderCampaigns(response.campaigns); renderAllocation(response.optimization); renderEvidence(response.evidence); renderHealth(response.data_health);
   if (initializing) {
     baselineBudgets = Object.fromEntries(response.channels.map((row) => [row.channel, row.planned_budget]));
     byId('google').value = Math.round(baselineBudgets.SEARCH + (baselineBudgets.SHOPPING || 0) + (baselineBudgets.PERFORMANCE_MAX || 0) + (baselineBudgets.DEMAND_GEN || 0) + (baselineBudgets.DISPLAY || 0) + (baselineBudgets.VIDEO || 0));
