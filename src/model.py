@@ -120,24 +120,31 @@ class HorizonModel:
             support = max(historic_spend / max(int(history["date"].nunique()), 1) * horizon_days, 1.0)
             extrapolation = planned_budget > 1.5 * support
             sigma = self.global_log_sigma * (1.0 + (1.0 - reliability) + (0.55 if extrapolation else 0.0))
-            # A normalized logarithmic response curve preserves the baseline forecast
-            # at the current plan while making incremental budget progressively less productive.
-            curve_baseline_budget = max(baseline_budget, 1.0)
-            saturation_scale = max(curve_baseline_budget * 1.5, 1.0)
-            normalization = curve_baseline_budget / (saturation_scale * math.log1p(curve_baseline_budget / saturation_scale))
-            revenue_p50 = max(0.0, roas * saturation_scale * math.log1p(planned_budget / saturation_scale) * normalization)
             if planned_budget <= 0:
                 # A user who sets a campaign plan to zero must never receive a
                 # positive paid-media revenue forecast from a model intercept.
                 revenue_p10 = revenue_p50 = revenue_p90 = 0.0
+                spend_p10 = spend_p50 = spend_p90 = 0.0
             else:
                 direct_quantiles = self.direct_quantiles(history, str(channel), str(campaign_type), as_of, horizon_days, planned_budget)
                 if direct_quantiles is not None:
                     revenue_p10, revenue_p50, revenue_p90 = direct_quantiles
                 else:
+                    # Fallback only when the direct model is unavailable: a
+                    # normalized logarithmic response preserves the baseline at
+                    # the current plan and saturates incremental spend.
+                    curve_baseline_budget = max(baseline_budget, 1.0)
+                    saturation_scale = max(curve_baseline_budget * 1.5, 1.0)
+                    normalization = curve_baseline_budget / (
+                        saturation_scale * math.log1p(curve_baseline_budget / saturation_scale)
+                    )
+                    revenue_p50 = max(
+                        0.0,
+                        roas * saturation_scale * math.log1p(planned_budget / saturation_scale) * normalization,
+                    )
                     revenue_p10 = revenue_p50 * math.exp(-1.28155 * sigma)
                     revenue_p90 = revenue_p50 * math.exp(1.28155 * sigma)
-            spend_p10, spend_p90 = planned_budget * 0.90, planned_budget * 1.05
+                spend_p10, spend_p50, spend_p90 = self._spend_quantiles(history, horizon_days, planned_budget)
             flags = []
             if active_days < self.min_history_days:
                 flags.append("sparse_recent_history")
@@ -152,7 +159,44 @@ class HorizonModel:
                 "campaign_id": str(campaign_id), "campaign_key": campaign_key, "campaign_name": campaign_name,
                 "planned_budget": planned_budget, "predicted_revenue_p10": revenue_p10,
                 "predicted_revenue_p50": revenue_p50, "predicted_revenue_p90": revenue_p90,
-                "predicted_spend_p10": spend_p10, "predicted_spend_p50": planned_budget,
+                "predicted_spend_p10": spend_p10, "predicted_spend_p50": spend_p50,
                 "predicted_spend_p90": spend_p90, "quality_flags": ";".join(flags),
             })
         return pd.DataFrame(rows)
+
+    @staticmethod
+    def _spend_quantiles(history: pd.DataFrame, horizon_days: int, planned_budget: float) -> tuple[float, float, float]:
+        """Empirical spend intervals from rolling horizon delivery, centered on the plan.
+
+        ``predicted_spend_p50`` remains the planner's intended budget. P10/P90 widen
+        from the coefficient of variation of historical horizon-length spend totals
+        and, when available, under/over-delivery versus configured budgets.
+        """
+        if planned_budget <= 0:
+            return 0.0, 0.0, 0.0
+        daily = history.groupby("date", sort=True)["spend"].sum()
+        cv = 0.12
+        if len(daily) >= max(horizon_days, 14):
+            rolled = daily.rolling(window=horizon_days, min_periods=horizon_days).sum().dropna()
+            if len(rolled) >= 3:
+                mean_spend = float(rolled.mean())
+                std_spend = float(rolled.std(ddof=0))
+                if mean_spend > 0:
+                    cv = min(0.45, max(0.05, std_spend / mean_spend))
+        delivery = 1.0
+        configured = history["configured_budget"]
+        observed = history[(configured > 0) & history["spend"].notna()]
+        if len(observed) >= 7:
+            ratios = (observed["spend"] / observed["configured_budget"]).clip(lower=0.0, upper=2.0)
+            delivery = float(ratios.median())
+            delivery = min(1.25, max(0.55, delivery))
+        # Center on the plan, then apply delivery bias and historical volatility.
+        center = planned_budget * delivery
+        z = 1.28155
+        spend_p10 = max(0.0, center * (1.0 - z * cv))
+        spend_p90 = center * (1.0 + z * cv)
+        spend_p50 = planned_budget
+        # Keep the plan inside the interval so the fan chart remains coherent.
+        spend_p10 = min(spend_p10, spend_p50)
+        spend_p90 = max(spend_p90, spend_p50)
+        return spend_p10, spend_p50, spend_p90

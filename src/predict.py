@@ -20,7 +20,7 @@ import pandas as pd
 
 from src.canonicalize import canonicalize
 from src.forecast import build_forecast
-from src.ingest import read_source_files
+from src.ingest import media_plan_budget_overrides, read_source_files
 from src.model import HorizonModel
 from src.output_adapter import write_predictions_csv
 from src.validate import validate_canonical
@@ -54,12 +54,24 @@ def _log(event: str, **fields: object) -> None:
 
 def generate_predictions(data_dir: Path, model_path: Path, output_path: Path) -> int:
     """Run evaluator-safe inference and atomically replace the output CSV."""
-    canonical = canonicalize(read_source_files(data_dir))
+    sources = read_source_files(data_dir)
+    media_plan = sources.pop("media_plan", None)
+    plan_overrides = media_plan_budget_overrides(media_plan) if media_plan is not None else {}
+    canonical = canonicalize(sources)
     quality = validate_canonical(canonical)
     quality.raise_if_blocking()
     model = load_model(model_path)
-    _log("input_validated", rows=len(canonical), model_version=model.model_version, model_sha256=model.artifact_sha256)
-    forecasts = [build_forecast(model, canonical, horizon) for horizon in (30, 60, 90)]
+    _log(
+        "input_validated",
+        rows=len(canonical),
+        model_version=model.model_version,
+        model_sha256=model.artifact_sha256,
+        media_plan_rows=0 if media_plan is None else int(len(media_plan)),
+    )
+    forecasts = [
+        build_forecast(model, canonical, horizon, plan_overrides.get(horizon) or None)
+        for horizon in (30, 60, 90)
+    ]
     output = write_predictions_csv(pd.concat(forecasts, ignore_index=True), output_path)
     _log("predictions_written", rows=len(output), output_path=output_path, horizons=[30, 60, 90])
     print(f"Wrote {len(output)} forecast rows to {output_path}")

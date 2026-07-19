@@ -1,15 +1,19 @@
-"""Verify a generated CSV against an organizer-provided header fixture.
+"""Verify a generated CSV against the locked horizon-v1 header, or an official one.
 
-The public guide requires an exact evaluator format but does not publish that
-format. This release-only command makes the remaining external gate explicit:
-once organizers provide a header fixture, the team can fail fast before
-submission rather than discovering a mismatch in the scorer.
+Until organizers publish a scorer header, the repository locks on
+``product/tests/fixtures/horizon_v1_header.csv``. Pass ``--official-header`` only
+when the organizers provide a replacement fixture.
 """
 from __future__ import annotations
 
 import argparse
 import csv
 from pathlib import Path
+
+from src.output_adapter import FORECAST_COLUMNS
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LOCKED_HEADER = ROOT / "product" / "tests" / "fixtures" / "horizon_v1_header.csv"
 
 
 def read_header(path: Path) -> list[str]:
@@ -23,20 +27,28 @@ def read_header(path: Path) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Compare predictions.csv columns with an official evaluator header")
+    parser = argparse.ArgumentParser(description="Compare predictions.csv columns with the locked or official evaluator header")
     parser.add_argument("--predictions", type=Path, required=True)
-    parser.add_argument("--official-header", type=Path, required=True)
+    parser.add_argument(
+        "--official-header",
+        type=Path,
+        default=DEFAULT_LOCKED_HEADER,
+        help="Defaults to the locked horizon-v1 fixture. Override only with an organizer-provided header.",
+    )
     args = parser.parse_args()
-    actual = read_header(args.predictions)
     expected = read_header(args.official_header)
+    if args.official_header.resolve() == DEFAULT_LOCKED_HEADER.resolve() and expected != FORECAST_COLUMNS:
+        raise SystemExit("Locked horizon-v1 fixture is out of sync with OutputAdapter.FORECAST_COLUMNS")
+    actual = read_header(args.predictions)
     if actual != expected:
         raise SystemExit(
             "Evaluator CSV header mismatch.\n"
-            f"Expected: {expected}\n"
-            f"Actual:   {actual}\n"
+            f"Expected ({args.official_header}): {expected}\n"
+            f"Actual ({args.predictions}): {actual}\n"
             "Update the versioned OutputSchema and its fixture before submission."
         )
-    print(f"Evaluator CSV header matches official fixture: {args.official_header}")
+    label = "locked horizon-v1 fixture" if args.official_header.resolve() == DEFAULT_LOCKED_HEADER.resolve() else "official fixture"
+    print(f"Evaluator CSV header matches {label}: {args.official_header}")
 
 
 if __name__ == "__main__":

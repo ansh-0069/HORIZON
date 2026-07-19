@@ -6,13 +6,15 @@
 - **Version:** `horizon-direct-ridge-v3-seasonal-plan`
 - **Execution:** deterministic, offline, inference-only
 - **Horizons:** aggregate 30, 60, and 90 days
-- **Targets:** campaign revenue P10/P50/P90; rollups derive spend and ROAS ranges
+- **Targets:** campaign revenue and spend P10/P50/P90; hierarchy ROAS and Pr(target) from joint draw paths
 
 ## Method
 
 One direct ridge model is trained per horizon on time-respecting campaign cutoffs. Features include planned budget, recent and long-run ROAS, recent spend/revenue, active days, spend trend, future-horizon month encoding, channel, and campaign type. The model is trained outside the protected evaluator path and serialized into `pickle/model.pkl`.
 
-If a future budget scenario is supplied, it is used directly. If no plan is supplied, the 30/60-day baseline uses current delivery run rate. The 90-day baseline applies a bounded calendar-month adjustment to avoid extrapolating a short holiday spike across an entire quarter. This is a plan-default assumption, not a claim that the model predicts media spend.
+If a future budget scenario is supplied (product UI overrides or optional `media_plan.csv` on the scored path), it is used directly. If no plan is supplied, the 30/60-day baseline uses current delivery run rate. The 90-day baseline applies a bounded calendar-month adjustment to avoid extrapolating a short holiday spike across an entire quarter. This is a plan-default assumption, not a claim that the model predicts media spend.
+
+Hierarchy totals use deterministic joint draws through leaf P10/P50/P90 knots. ROAS intervals and ROAS-target probabilities are computed on those aggregated paths.
 
 ## Validation
 
@@ -28,7 +30,7 @@ Three folds are too few to claim a coverage guarantee. The UI labels those figur
 
 ## Uncertainty and decision limits
 
-P10/P90 use residual quantiles from later chronological training windows. They are empirical ranges, not conformal guarantees or causal confidence intervals. Spend P10/P90 remain planning assumptions around the selected plan. The ROAS-target probability is a distributional approximation and should be used as a guardrail signal, not a calibrated promise.
+Revenue P10/P90 use residual quantiles from later chronological training windows. Spend P10/P90 widen from historical horizon spend volatility and under/over-delivery versus configured budgets, with the planner's budget as P50. They are empirical ranges, not conformal guarantees or causal confidence intervals. The ROAS-target probability is estimated from joint draw paths and should be used as a guardrail signal, not a calibrated promise.
 
 The scenario optimiser uses the same direct response model where available. It enforces campaign support caps and channel constraints, uses the target ROAS as a hard filter while feasible, and explicitly reports when it must relax that guardrail to allocate the requested total budget.
 

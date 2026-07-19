@@ -69,10 +69,28 @@ class HorizonPipelineTests(unittest.TestCase):
         forecast = build_forecast(self.model, self.canonical, 60)
         overall = forecast[forecast["level"] == "overall"].iloc[0]
         leaves = forecast[forecast["level"] == "campaign"]
+        # Comonotonic joint draws keep revenue/spend additive at shared percentiles.
         self.assertAlmostEqual(float(overall["predicted_revenue_p50"]), float(leaves["predicted_revenue_p50"].sum()), places=6)
+        self.assertAlmostEqual(float(overall["planned_budget"]), float(leaves["planned_budget"].sum()), places=6)
+        self.assertAlmostEqual(
+            float(overall["predicted_roas_p50"]),
+            float(overall["predicted_revenue_p50"]) / max(float(overall["predicted_spend_p50"]), 1e-9),
+            places=6,
+        )
+        self.assertIn("joint_draw_rollup", str(overall["quality_flags"]))
         self.assertTrue((forecast["predicted_revenue_p10"] <= forecast["predicted_revenue_p50"]).all())
         self.assertTrue((forecast["predicted_revenue_p50"] <= forecast["predicted_revenue_p90"]).all())
+        self.assertTrue((forecast["predicted_spend_p10"] <= forecast["predicted_spend_p50"]).all())
+        self.assertTrue((forecast["predicted_spend_p50"] <= forecast["predicted_spend_p90"]).all())
         self.assertTrue(((forecast["probability_roas_above_target"] >= 0) & (forecast["probability_roas_above_target"] <= 1)).all())
+
+    def test_spend_intervals_use_historical_delivery_uncertainty(self) -> None:
+        leaves = self.model.forecast_campaigns(self.canonical, 30)
+        self.assertFalse(leaves.empty)
+        ratios = leaves["predicted_spend_p10"] / leaves["predicted_spend_p50"].clip(lower=1e-9)
+        # Historical CV replaces the old fixed 0.90 / 1.05 cosmetic bands.
+        self.assertFalse(((ratios - 0.90).abs() < 1e-12).all())
+        self.assertTrue((leaves["predicted_spend_p50"] == leaves["planned_budget"]).all())
 
     def test_scenario_accepts_override_and_rejects_negative_budget(self) -> None:
         campaign_id = str(self.canonical.iloc[0]["source_campaign_id"])
@@ -162,6 +180,43 @@ class HorizonPipelineTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "multiple currencies"):
+                read_source_files(data_dir)
+
+    def test_media_plan_applies_on_scored_predict_path(self) -> None:
+        baseline = build_forecast(self.model, self.canonical, 30)
+        leaf = baseline[baseline["level"] == "campaign"].iloc[0]
+        source_system, campaign_id = str(leaf["campaign_key"]).split(":", 1)
+        planned = max(250.0, float(leaf["planned_budget"]) * 1.35)
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary) / "data"
+            shutil.copytree(PRODUCT_ROOT / "demo_data", data_dir)
+            (data_dir / "media_plan.csv").write_text(
+                "source_system,source_campaign_id,horizon_days,planned_budget\n"
+                f"{source_system},{campaign_id},30,{planned}\n",
+                encoding="utf-8",
+            )
+            output = Path(temporary) / "predictions.csv"
+            generate_predictions(data_dir, ROOT / "pickle" / "model.pkl", output)
+            result = pd.read_csv(output)
+            matched = result[
+                (result["horizon_days"] == 30)
+                & (result["level"] == "campaign")
+                & (result["channel"].astype(str) == str(leaf["channel"]))
+                & (result["campaign_id"].astype(str) == campaign_id)
+            ]
+            self.assertEqual(len(matched), 1)
+            self.assertAlmostEqual(float(matched.iloc[0]["planned_budget"]), planned, places=4)
+
+    def test_media_plan_rejects_invalid_horizon(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data_dir = Path(temporary) / "data"
+            shutil.copytree(ROOT / "data", data_dir)
+            (data_dir / "media_plan.csv").write_text(
+                "source_system,source_campaign_id,horizon_days,planned_budget\n"
+                "google_ads,demo,45,1000\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "horizon_days"):
                 read_source_files(data_dir)
 
     def test_forecast_id_binds_data_and_scenario(self) -> None:
@@ -282,10 +337,14 @@ class HorizonPipelineTests(unittest.TestCase):
                 "risks": ["Forecast is conditional."],
             },
         }
-        with patch("product.app.service.load_evidence_config", return_value=None):
-            response = service.explain({"scenario": {"horizon_days": 30}})
-        self.assertEqual(response["mode"], "deterministic_fallback")
+        response = service.explain({"scenario": {"horizon_days": 30}})
+        self.assertEqual(response["mode"], "deterministic_evidence_brief")
+        self.assertIn("brief", response)
+        self.assertEqual(response["brief"]["causal_status"], "observational_association")
         self.assertEqual(response["forecast_id"], "test-forecast")
+        with patch("product.app.service.load_evidence_config", return_value=None):
+            live = service.explain({"scenario": {"horizon_days": 30}, "prefer_live_llm": True})
+        self.assertEqual(live["mode"], "deterministic_fallback")
 
     def test_evidence_client_accepts_a_guarded_structured_response(self) -> None:
         forecast = build_forecast(self.model, self.canonical, 30)

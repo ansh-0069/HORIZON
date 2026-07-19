@@ -53,11 +53,11 @@ Verify that the local revision is pushed before submitting:
 python -m product.scripts.release_check --strict --require-upstream-sync
 ```
 
-## Optional OpenAI narrative
+## Decision briefs (deterministic by default)
 
-Only the **Generate grounded AI brief** UI action can use `OPENAI_API_KEY`; it reads `product/.env.local`. Forecasting, optimization, training, tests, and the submission runner do not need a key or internet connection. If the key, credits, or network are unavailable, the product UI falls back to deterministic evidence.
+The planner **Show decision brief** action is deterministic: it organizes sealed forecast evidence and never requires a network call. Optional live LLM narration is available only when the API explicitly sets `prefer_live_llm` and `OPENAI_API_KEY` is configured in `product/.env.local`.
 
-The API key is deliberately not a submission dependency. Before a live demo, verify provider quota and the selected model with `python -m product.scripts.verify_evidence_narrative`; do not claim a live AI narrative if that explicit smoke test cannot complete.
+Forecasting, optimization, training, tests, and the submission runner do not need a key or internet connection. Do not claim a live AI narrative in demos unless `python -m product.scripts.verify_evidence_narrative` succeeds.
 
 ## Data and artifacts
 

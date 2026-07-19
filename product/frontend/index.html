@@ -27,6 +27,7 @@
       </section>
 
       <section id="notice" class="notice loading">Loading the baseline plan…</section>
+      <section id="guardrail-delta" class="delta-banner" aria-live="polite">Budget-shock guardrail delta will appear after you Simulate plan.</section>
 
       <section class="metric-grid" aria-label="Forecast summary">
         <article class="metric"><p>Expected revenue</p><strong id="revenue">—</strong><span id="revenue-range">P10-P90: —</span></article>
@@ -42,7 +43,7 @@
 
       <section class="grid-two">
         <article class="panel"><div class="panel-header"><div><p class="eyebrow">ALLOCATION OUTLOOK</p><h2>Channel contribution</h2></div><p>Median forecast</p></div><div id="channels" class="table-wrap"></div></article>
-        <article class="panel evidence"><div class="panel-header"><div><p class="eyebrow">EVIDENCE BRIEF</p><h2 id="headline">—</h2></div><button id="ai-brief" class="outline compact">Generate grounded AI brief</button></div><div id="evidence"></div><div id="ai-evidence" class="ai-evidence" aria-live="polite"></div></article>
+        <article class="panel evidence"><div class="panel-header"><div><p class="eyebrow">EVIDENCE BRIEF</p><h2 id="headline">—</h2></div><button id="ai-brief" class="outline compact">Show decision brief</button></div><div id="evidence"></div><div id="ai-evidence" class="ai-evidence" aria-live="polite"></div></article>
       </section>
 
       <section class="grid-two">
@@ -54,7 +55,7 @@
 
       <section class="grid-two">
         <article class="panel"><div class="panel-header"><div><p class="eyebrow">TRUST CENTER</p><h2>Data health and backtest</h2></div></div><div id="health"></div><div id="trust"></div></article>
-        <article class="panel"><div class="panel-header"><div><p class="eyebrow">OPERATIONAL RISK</p><h2>Model boundaries</h2></div></div><ul class="boundary"><li>Platform attribution is treated as the source of truth.</li><li>Budget changes are conditional forecasts, not causal claims.</li><li>Wide ranges and support warnings require validation before action.</li></ul></article>
+        <article class="panel"><div class="panel-header"><div><p class="eyebrow">OPERATIONAL RISK</p><h2>Model boundaries</h2></div></div><ul class="boundary"><li>Meta <code>conversion</code> is treated as attributed revenue only by documented assumption.</li><li>Platform attribution is the source of truth; Horizon does not claim causal lift.</li><li>Budget changes are conditional forecasts; wide ranges require validation before action.</li><li>Decision briefs are deterministic by default; live LLM narration is optional and never changes numbers.</li></ul></article>
       </section>
     </main>
     <script src="/app.js"></script>

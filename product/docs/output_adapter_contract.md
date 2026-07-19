@@ -48,7 +48,7 @@ The current schema preserves the project’s forecast output while keeping compa
 | `quality_flags` | `quality_flags`, `flags` | string | `none` |
 | `model_version` | `model_version`, `artifact_version` | string | Required |
 
-The final evaluator schema has not been published in the supplied guide. `horizon-v1` is therefore an explicit project contract, not a claim about an undisclosed evaluator format.
+The organizers have not published a separate scorer header in the supplied guide. Horizon therefore **locks** on `horizon-v1` via this adapter and `product/tests/fixtures/horizon_v1_header.csv` until an official header is provided.
 
 ## Compatibility and versioning strategy
 

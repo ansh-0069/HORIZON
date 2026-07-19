@@ -39,3 +39,13 @@ TAXONOMY_REQUIRED_COLUMNS = {"source_system", "source_campaign_id", "campaign_ty
 # must make its money, calendar, and attribution assumptions explicit.
 SEMANTICS_FILENAME = "source_semantics.csv"
 SEMANTICS_REQUIRED_COLUMNS = {"source_system", "currency", "timezone", "attribution_method", "revenue_field"}
+
+# Optional future media plan for the scored offline path. When absent, each
+# horizon uses the model's baseline budget defaults. When present, rows bind
+# source-qualified campaign budgets to a specific 30/60/90-day horizon.
+MEDIA_PLAN_FILENAME = "media_plan.csv"
+MEDIA_PLAN_REQUIRED_COLUMNS = {"source_system", "source_campaign_id", "horizon_days", "planned_budget"}
+MEDIA_PLAN_HORIZONS = frozenset({30, 60, 90})
+
+# Filenames that must never be treated as advertising-platform exports.
+OPTIONAL_DATA_FILENAMES = frozenset({TAXONOMY_FILENAME, SEMANTICS_FILENAME, MEDIA_PLAN_FILENAME})

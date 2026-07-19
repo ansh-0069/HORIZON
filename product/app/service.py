@@ -45,6 +45,11 @@ class PlannerService:
     def data_health(self) -> dict[str, Any]:
         meta = self.canonical[self.canonical["source_system"] == "meta_ads"]
         unknown_meta_types = int(meta["campaign_type"].eq("Generic").sum()) if not meta.empty else 0
+        assumptions = [
+            "Meta Ads `conversion` is treated as a platform-attributed revenue proxy until the dataset owner confirms otherwise.",
+            "Platform attribution is the source of truth; Horizon does not rebuild attribution or claim causal lift.",
+            "Forecast intervals are empirical residual ranges, not guarantees.",
+        ]
         return {
             "status": "warning" if self.quality.warnings else "healthy",
             "rows": int(len(self.canonical)),
@@ -52,6 +57,8 @@ class PlannerService:
             "date_start": str(self.canonical["date"].min().date()),
             "date_end": str(self.canonical["date"].max().date()),
             "meta_taxonomy_unknown_rows": unknown_meta_types,
+            "meta_revenue_assumption": assumptions[0],
+            "assumptions": assumptions,
             "warnings": self.quality.warnings,
             "blockers": self.quality.blockers,
         }
@@ -182,33 +189,78 @@ class PlannerService:
         """Return safe configuration metadata; never expose credentials."""
         return evidence_status()
 
-    def explain(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        """Generate a cited narrative after, and only after, deterministic forecasting.
+    @staticmethod
+    def _deterministic_brief(evidence: Mapping[str, Any]) -> dict[str, Any]:
+        """Shape sealed forecast evidence into the UI brief schema without an LLM."""
+        facts = list(evidence.get("facts") or [])
+        if not facts:
+            facts = [
+                str(evidence.get("headline") or "Forecast values are conditional on supplied attribution and the selected budget plan.")
+            ]
+        return {
+            "decision": str(evidence.get("decision") or "revise_or_test"),
+            "causal_status": str(evidence.get("causal_status") or "observational_association"),
+            "headline": str(
+                evidence.get("headline")
+                or "Decision brief generated from sealed forecast evidence without a live language model."
+            ),
+            "facts": [{"text": str(text), "evidence_ids": ["forecast_guardrail"]} for text in facts[:3]],
+            "assumptions": [
+                {
+                    "text": "Existing platform attribution is treated as truth; budget effects are observational associations.",
+                    "evidence_ids": ["causal_boundary"],
+                }
+            ],
+            "recommendations": [
+                {
+                    "text": str(
+                        evidence.get("recommended_validation")
+                        or "Validate material budget moves with a holdout or geo test."
+                    ),
+                    "evidence_ids": ["validation_plan"],
+                }
+            ],
+            "limitations": [
+                {"text": str(risk), "evidence_ids": ["risk_flags"]}
+                for risk in list(evidence.get("risks") or [])[:3]
+            ],
+        }
 
-        The fallback keeps the product useful offline and prevents the LLM from
-        becoming either a prediction dependency or a demo failure point.
+    def explain(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Return a sealed evidence brief after deterministic forecasting.
+
+        Live LLM narration is opt-in only. The default path never depends on
+        network access, API keys, or provider quota.
         """
         scenario = payload.get("scenario", payload)
         if not isinstance(scenario, Mapping):
             raise ValueError("scenario must be a JSON object")
         forecast = self.forecast(scenario)
         overall = forecast["overall"][0]
-        packet = build_evidence_packet(forecast["evidence"], overall)
+        evidence = forecast["evidence"]
+        packet = build_evidence_packet(evidence, overall)
+        deterministic = {
+            "mode": "deterministic_evidence_brief",
+            "forecast_id": overall["forecast_id"],
+            "deterministic_evidence": evidence,
+            "brief": self._deterministic_brief(evidence),
+            "message": "Deterministic evidence brief from sealed forecast numbers. No live LLM call was made.",
+        }
+        if not bool(payload.get("prefer_live_llm")):
+            return deterministic
         config = load_evidence_config()
         if config is None:
             return {
+                **deterministic,
                 "mode": "deterministic_fallback",
-                "forecast_id": overall["forecast_id"],
-                "deterministic_evidence": forecast["evidence"],
-                "message": "AI narrative is not configured; the deterministic evidence brief remains available.",
+                "message": "Live LLM requested but not configured; deterministic evidence brief remains available.",
             }
         try:
             brief = OpenAIEvidenceClient(config).generate(packet)
         except EvidenceGenerationError as exc:
             return {
+                **deterministic,
                 "mode": "deterministic_fallback",
-                "forecast_id": overall["forecast_id"],
-                "deterministic_evidence": forecast["evidence"],
                 "message": str(exc),
             }
         return {
@@ -217,6 +269,7 @@ class PlannerService:
             "model": config.model,
             "evidence_packet": packet,
             "brief": brief,
+            "message": "Optional live narrative generated from the sealed evidence packet only.",
         }
 
     def record_decision(self, payload: Mapping[str, Any]) -> dict[str, Any]:

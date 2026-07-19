@@ -83,6 +83,8 @@ Example:
 
 An optional `campaign_taxonomy.csv` may contain `source_system`, `source_campaign_id`, and `campaign_type` to override name-based Meta campaign-type inference. It is not required by the evaluator.
 
+An optional `media_plan.csv` may supply future campaign budgets for the scored offline path. Required columns: `source_system`, `source_campaign_id`, `horizon_days` (`30`, `60`, or `90`), and `planned_budget` (≥ 0). When absent, Horizon uses its baseline plan defaults.
+
 | Source | Required columns |
 | --- | --- |
 | Google Ads | `campaign_id`, `segments_date`, `campaign_advertising_channel_type`, `campaign_name`, `metrics_cost_micros`, `metrics_conversions_value`, `metrics_clicks`, `metrics_impressions`, `metrics_conversions`, `campaign_budget_amount` |
@@ -108,7 +110,7 @@ risk_score, quality_flags, model_version
 
 ## Model Details
 
-The serialized `HorizonModel` performs deterministic local inference. It uses a pre-trained direct ridge model per 30/60/90-day horizon with budget, trend, seasonality, channel, and campaign-type features. When no future budget is provided, the 90-day baseline plan is seasonally adjusted from historical monthly delivery; an explicit scenario budget always takes precedence. P10/P90 are chronological holdout residual quantiles; they are not causal guarantees or conformal intervals. Spend intervals, ROAS intervals, ROAS-target probability, and risk score are then derived and reconciled into higher hierarchy levels. See the [current implementation truth](product/docs/current_implementation.md) and [model card](product/docs/model_card.md).
+The serialized `HorizonModel` performs deterministic local inference. It uses a pre-trained direct ridge model per 30/60/90-day horizon with budget, trend, seasonality, channel, and campaign-type features. When no future budget is provided, the 90-day baseline plan is seasonally adjusted from historical monthly delivery; an explicit scenario or `media_plan.csv` budget always takes precedence. Revenue P10/P90 are chronological holdout residual quantiles; spend P10/P90 use historical delivery uncertainty around the plan. Hierarchy ROAS and ROAS-target probability are derived from deterministic joint draw paths, then risk score is attached. See the [current implementation truth](product/docs/current_implementation.md) and [model card](product/docs/model_card.md).
 
 The model artifact is loaded read-only. No fitting, hyperparameter search, feature-store write, or artifact mutation occurs during execution.
 
@@ -149,9 +151,16 @@ The command fails closed with a non-zero exit status and an actionable `ERROR: o
 - The repository includes an evaluator rehearsal at `product/scripts/rehearse_submission.py`; it is optional and not imported by `run.sh`.
 - GitHub Actions recreates the Python 3.11 dependency install and runs the exact evaluator command on every `main` push.
 
-### Final evaluator-contract gate
+### Locked output-contract gate
 
-The supplied guide does not include the scorer header. Once organizers provide it, run the exact evaluator command, save the official one-line header fixture, then verify it without guessing:
+Until organizers publish a different scorer header, this repository locks on `horizon-v1` (`product/tests/fixtures/horizon_v1_header.csv`). After generating predictions, verify:
+
+```bash
+python -m product.scripts.verify_evaluator_contract \
+  --predictions ./output/predictions.csv
+```
+
+If organizers later provide an official one-line header fixture, override explicitly:
 
 ```bash
 python -m product.scripts.verify_evaluator_contract \
@@ -183,9 +192,12 @@ python -m product.scripts.release_check --strict --require-upstream-sync
   timezone, attribution method, and revenue-field definition for all sources.
   Without it, the runner emits a review warning rather than fabricating those
   assumptions from incomplete platform exports.
+- An optional `media_plan.csv` can bind future campaign budgets to each
+  horizon on the scored path; without it, baseline plan defaults are used.
 - It does not adjust for cross-currency conversion, attribution-method changes, promotions, offline conversions, or unobserved market shocks.
 - Forecasts are decision-support estimates, not revenue guarantees.
-- The current output contract is a project-defined schema pending any final evaluator template.
+- The locked output contract is `horizon-v1` until organizers publish a replacement header.
+- Meta Ads `conversion` is treated as attributed revenue only by documented assumption.
 
 ## Future Improvements
 

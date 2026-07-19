@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
+import json
 from pathlib import Path
 import re
 import stat
@@ -17,7 +19,15 @@ from src.output_adapter import FORECAST_COLUMNS
 
 
 ROOT = Path(__file__).resolve().parents[2]
-REQUIRED_ROOT_FILES = ("run.sh", "requirements.txt", "README.md", ".python-version", "pickle/model.pkl")
+REQUIRED_ROOT_FILES = (
+    "run.sh",
+    "requirements.txt",
+    "README.md",
+    ".python-version",
+    "pickle/model.pkl",
+    "pickle/model_manifest.json",
+)
+LOCKED_OUTPUT_FIXTURE = "product/tests/fixtures/horizon_v1_header.csv"
 REQUIRED_DATA_FILES = (
     "google_ads_campaign_stats.csv",
     "bing_campaign_stats.csv",
@@ -83,10 +93,22 @@ def check() -> list[str]:
     _check(not forbidden, f"Protected src imports network modules: {forbidden}", failures)
     _check("product" not in imported, "Protected src imports the optional product layer", failures)
 
-    fixture = (ROOT / "product" / "tests" / "fixtures" / "horizon_v1_header.csv")
-    _check(fixture.is_file(), "Missing versioned output-header fixture", failures)
+    fixture = ROOT / LOCKED_OUTPUT_FIXTURE
+    _check(fixture.is_file(), f"Missing locked output-header fixture: {LOCKED_OUTPUT_FIXTURE}", failures)
     if fixture.is_file():
-        _check(fixture.read_text(encoding="utf-8").strip().split(",") == FORECAST_COLUMNS, "Output-header fixture differs from adapter contract", failures)
+        fixture_columns = fixture.read_text(encoding="utf-8").strip().split(",")
+        _check(fixture_columns == FORECAST_COLUMNS, "Locked horizon-v1 fixture differs from OutputAdapter contract", failures)
+        _check(len(FORECAST_COLUMNS) == 21, "horizon-v1 must remain a 21-column locked contract until organizers publish a replacement", failures)
+
+    manifest = ROOT / "pickle" / "model_manifest.json"
+    if manifest.is_file() and (ROOT / "pickle" / "model.pkl").is_file():
+        try:
+            declared = json.loads(manifest.read_text(encoding="utf-8"))
+            actual_sha = hashlib.sha256((ROOT / "pickle" / "model.pkl").read_bytes()).hexdigest()
+            _check(declared.get("artifact_sha256") == actual_sha, "pickle/model_manifest.json SHA-256 does not match pickle/model.pkl", failures)
+            _check(bool(declared.get("model_version")), "pickle/model_manifest.json is missing model_version", failures)
+        except (OSError, json.JSONDecodeError, TypeError) as exc:
+            failures.append(f"pickle/model_manifest.json is unreadable: {exc}")
     return failures
 
 
