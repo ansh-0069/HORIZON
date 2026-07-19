@@ -20,6 +20,8 @@ from product.decisioning.optimizer import recommend_allocation
 from product.decisioning.scenario import simulate_budget_plan
 from product.evaluation import canonical_fingerprint, evaluate_all_horizons
 
+PRODUCT_ROOT = Path(__file__).resolve().parents[1]
+
 
 class PlannerService:
     """In-memory demo service; the production API can use these same domain functions."""
