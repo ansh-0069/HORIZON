@@ -4,9 +4,17 @@ import argparse
 from dataclasses import replace
 import hashlib
 import json
+import os
 from pathlib import Path
 import pickle
 import sys
+
+# Keep the protected entry point fast and deterministic even when it is
+# invoked directly (rather than through run.sh).  This must precede pandas,
+# which may import NumPy/BLAS during module initialization.
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
 import pandas as pd
 

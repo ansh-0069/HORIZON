@@ -55,6 +55,10 @@ The prediction command itself never installs packages and never accesses a netwo
 
 ## Offline Execution
 
+`run.sh` caps BLAS backends at one thread. The model performs many small,
+serial linear-algebra operations; this prevents thread-pool overhead and keeps
+runtime deterministic on shared evaluator machines.
+
 From the repository root (with the committed sample files in `./data`):
 
 ```bash

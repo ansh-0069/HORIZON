@@ -13,6 +13,15 @@ DATA_DIR="${1:-./data}"
 MODEL_PATH="${2:-./pickle/model.pkl}"
 OUTPUT_PATH="${3:-./output/predictions.csv}"
 
+# Forecast inference evaluates many small linear models.  Allowing a BLAS
+# runtime to create a large worker pool for each operation is materially
+# slower on shared evaluator machines and can make otherwise deterministic
+# execution depend on host scheduling.  One thread is the correct execution
+# profile for this small, serial workload.
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 if [[ -n "${PYTHON_BIN:-}" ]]; then
   PYTHON_EXECUTABLE="$PYTHON_BIN"
