@@ -9,7 +9,7 @@
 
 The repository is ready for an offline evaluator rehearsal. There are no code-level blockers in the evaluator path. The outstanding score deduction is for the organizer's final `predictions.csv` scorer schema, which is not specified in the supplied submission guide and therefore cannot yet be validated exactly.
 
-**Latest local verification (2026-07-18):** `product.scripts.release_check --strict` passed, and the exact Git-Bash rehearsal produced `156` rows spanning the `30`, `60`, and `90` day horizons with the `horizon-direct-ridge-v2` artifact. The model is loaded read-only and its SHA-256 is verified unchanged by the rehearsal.
+**Latest local verification (2026-07-19):** `product.scripts.release_check --strict` passed, and the exact Git-Bash rehearsal produced `156` rows spanning the `30`, `60`, and `90` day horizons with the `horizon-direct-ridge-v3-seasonal-plan` artifact. The model is loaded read-only and its SHA-256 is verified unchanged by the rehearsal.
 
 ## Evidence
 
@@ -17,7 +17,7 @@ Command executed against an isolated temporary copy of the supplied data and `pi
 
 ```powershell
 python -m product.scripts.rehearse_submission `
-  --data-dir .\product\supplied_data `
+  --data-dir .\product\demo_data `
   --model .\pickle\model.pkl `
   --bash "C:\Program Files\Git\bin\bash.exe" `
   --temporary-root .\product\output
@@ -48,7 +48,7 @@ Observed result:
 
 ## ⚠ Warnings
 
-1. **Final scorer schema is not in the supplied guide.** The current output contains 21 documented columns. When organizers publish exact required column names, hierarchy expectations, IDs, or row granularity, update only `src/contracts.py` and `src/output_adapter.py`, then rerun this rehearsal. This is the main remaining submission risk.
+1. **Final scorer schema is not in the supplied guide.** The current output contains 21 documented columns. When organizers publish exact required column names, hierarchy expectations, IDs, or row granularity, update the versioned `src/output_adapter.py` contract, then run `product.scripts.verify_evaluator_contract` against their header fixture before rerunning this rehearsal. This is the main remaining submission risk.
 2. **Python runtime must be 3.11+.** This is documented in `README.md`. The evaluator must install the pinned requirements under a compatible Python runtime before being taken offline.
 3. **Source-data quality warnings are intentional.** The supplied files emit warnings for 21 missing configured-budget rows and Meta conversion semantics/taxonomy review. These do not stop output generation, but they should be transparently mentioned in the demo.
 4. **Bash is part of the stated evaluator contract.** `run.sh` assumes a POSIX shell with standard `mkdir` and `dirname`, consistent with the guide's `./run.sh` command. Windows rehearsal needs Git Bash or WSL; this is not a runtime dependency for a Linux evaluator.

@@ -51,16 +51,13 @@ flowchart LR
     ├── scripts/                   # clean-room rehearsal and evaluation CLI
     ├── tests/
     ├── demo_data/
-    ├── supplied_data/
     ├── models/                    # reports
     ├── output/                    # local outputs and decision ledger
-    ├── docs/                      # plans, reports, and supplied PDFs
+    ├── docs/                      # implementation truth, model card, reference PDFs
     └── README.md
 ```
 
-Repository metadata such as `.git/` and `.gitignore` is not part of either runtime layer. The evaluator may provide `DATA_DIR` and `OUTPUT_PATH` as arguments, but the submission guide also requires zero-argument operation. Therefore the committed root `data/` directory is part of the protected path and `run.sh` defaults to `./data`, `./pickle/model.pkl`, and `./output/predictions.csv`.
-
-**Local packaging caveat:** a legacy root `output/horizon_decisions.sqlite` file is currently held open by another Windows process and could not be moved safely. It is ignored by `.gitignore`, has no reference from the protected path, and must be omitted from the final repository/package after the owning process releases it. All active product output paths now resolve to `product/output/`.
+Repository metadata such as `.git/` and `.gitignore` is not part of either runtime layer. The evaluator may provide `DATA_DIR` and `OUTPUT_PATH` as arguments, but the submission guide also requires zero-argument operation. Therefore the committed root `data/` directory is part of the protected path and `run.sh` defaults to `./data`, `./pickle/model.pkl`, and `./output/predictions.csv`. Local prediction/ledger artifacts under `output/` and `product/output/` are gitignored.
 
 ## File Movement Plan Applied
 
@@ -120,7 +117,7 @@ python -m unittest discover -s product/tests -q
 
 # 4. Exact evaluator rehearsal, against a copied model and data directory.
 python -m product.scripts.rehearse_submission \
-  --data-dir ./product/supplied_data \
+  --data-dir ./product/demo_data \
   --model ./pickle/model.pkl
 
 # 5. Exact required evaluator command.

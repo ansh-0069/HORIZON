@@ -3,6 +3,15 @@
 !.env.example
 __pycache__/
 *.py[cod]
+*$py.class
 .pytest_cache/
-output/*.sqlite
-product/output/*.sqlite
+.mypy_cache/
+.ruff_cache/
+.agents/
+*.sqlite
+
+# Local run artifacts (evaluator writes its own OUTPUT_PATH)
+output/*
+!output/.gitkeep
+product/output/*
+!product/output/.gitkeep

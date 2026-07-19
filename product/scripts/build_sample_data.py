@@ -12,7 +12,7 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_DIR = ROOT / "product" / "supplied_data"
+SOURCE_DIR = ROOT / "product" / "demo_data"
 TARGET_DIR = ROOT / "data"
 DATE_COLUMNS = {
     "google_ads_campaign_stats.csv": "segments_date",
