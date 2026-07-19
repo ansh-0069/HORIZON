@@ -7,6 +7,9 @@ let scenarioIsStale = true;
 let baselineOverall = null;
 let latestEvidence = null;
 let latestHealth = null;
+let narrationStatus = {configured: false, live_narration_server_enabled: false};
+let scenarioRequestSequence = 0;
+let briefRequestSequence = 0;
 
 const byId = (id) => document.getElementById(id);
 const setNotice = (text, kind='ok') => { const node = byId('notice'); node.textContent = text; node.className = `notice ${kind}`; };
@@ -37,11 +40,13 @@ function renderScenarioState() {
   const node = byId('scenario-state');
   const save = byId('save');
   const brief = byId('decision-brief');
+  const liveBrief = byId('live-decision-brief');
   if (!latestScenario) {
     node.textContent = 'No forecast scenario is ready to save or brief.';
     node.className = 'delta-banner warn';
     save.disabled = true;
     brief.disabled = true;
+    liveBrief.disabled = true;
     return;
   }
   if (scenarioIsStale) {
@@ -49,6 +54,7 @@ function renderScenarioState() {
     node.className = 'delta-banner warn';
     save.disabled = true;
     brief.disabled = true;
+    liveBrief.disabled = true;
     return;
   }
   const campaignCount = Object.keys(latestScenario.campaign_budgets || {}).length;
@@ -56,9 +62,26 @@ function renderScenarioState() {
   node.className = 'delta-banner ok';
   save.disabled = false;
   brief.disabled = false;
+  liveBrief.disabled = !(narrationStatus.configured && narrationStatus.live_narration_server_enabled);
+}
+
+function renderNarrationAvailability() {
+  const note = byId('decision-brief-note');
+  const liveBrief = byId('live-decision-brief');
+  const ready = Boolean(narrationStatus.configured && narrationStatus.live_narration_server_enabled);
+  if (ready) {
+    note.textContent = 'Deterministic brief is offline. Optional live narration can make one explicit network request from sealed evidence on this localhost demo only; it cannot change any forecast number or decision.';
+  } else if (narrationStatus.live_narration_server_enabled) {
+    note.textContent = 'Deterministic brief is offline. Live narration was enabled on localhost, but no local provider credential is configured, so no network request can be made and the AI control remains unavailable.';
+  } else {
+    note.textContent = 'Deterministic evidence briefs never use an API key or internet connection. Optional live narration is disabled by default and requires the explicit localhost --enable-live-llm server flag plus a separate button click.';
+  }
+  liveBrief.disabled = !ready || !latestScenario || scenarioIsStale;
 }
 
 function markScenarioStale() {
+  // A late scenario response must never overwrite a newer user intent.
+  scenarioRequestSequence += 1;
   if (!latestScenario || scenarioIsStale || inputFingerprint() === latestScenarioInputFingerprint) return;
   scenarioIsStale = true;
   renderScenarioState();
@@ -89,9 +112,9 @@ function renderHealth(health) {
     <div class="assumption-banner"><strong>Meta revenue assumption:</strong> ${escapeHtml(assumption)}</div>
     <div class="health-row"><span>Source records</span><strong>${number.format(health.rows)}</strong></div>
     <div class="health-row"><span>Campaigns</span><strong>${number.format(health.campaigns)}</strong></div>
-    <div class="health-row"><span>Coverage</span><strong>${health.date_start} - ${health.date_end}</strong></div>
+    <div class="health-row"><span>Coverage</span><strong>${escapeHtml(health.date_start || 'unknown')} - ${escapeHtml(health.date_end || 'unknown')}</strong></div>
     <div class="health-row"><span>Unclassified Meta rows</span><strong>${number.format(health.meta_taxonomy_unknown_rows || 0)}</strong></div>
-    <div class="health-row"><span>Gate status</span><strong class="badge ${health.status === 'warning' ? 'warn' : ''}">${health.status}</strong></div>
+    <div class="health-row"><span>Gate status</span><strong class="badge ${health.status === 'warning' ? 'warn' : ''}">${escapeHtml(health.status || 'unknown')}</strong></div>
     ${planningDefaults.length ? `<h3>Planning defaults</h3><ul class="warning-list">${planningDefaults.map((item) => `<li>${escapeHtml(item)}. Baseline media plans infer a recent-spend default where a configured budget is absent.</li>`).join('')}</ul>` : ''}
     ${dataWarnings.length ? `<ul class="warning-list">${dataWarnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}`;
 }
@@ -102,27 +125,27 @@ function renderTrust(trust) {
     return;
   }
   const baseline = Object.fromEntries((trust.baseline_horizons || []).map((item) => [item.horizon_days, item]));
-  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; const calibration = item.median_calibration_samples ? ` Temporal holdout residuals: median ${number.format(item.median_calibration_samples)} samples.` : ''; const nominal = Math.round((item.nominal_interval_coverage || 0.8) * 100); const caution = item.folds < 5 ? ' Small fold count: treat coverage as directional, not a guarantee.' : ''; return `<p><strong>${item.horizon_days} days:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% observed coverage for a nominal ${nominal}% P10-P90 interval across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.${calibration}${caution}</p>`; }).join('');
+  const lines = trust.horizons.map((item) => { const prior = baseline[item.horizon_days]; const comparison = prior ? ` versus ${Math.round(prior.revenue_wape * 100)}% seasonal/statistical baseline` : ''; const calibration = item.median_calibration_samples ? ` Temporal holdout residuals: median ${number.format(item.median_calibration_samples)} samples.` : ''; const nominal = Math.round((item.nominal_interval_coverage || 0.8) * 100); const reliability = item.roas_target_probability_reliability || {}; const probabilityNote = reliability.status === 'evaluated' ? ` Target draw-share Brier ${number.format(reliability.brier_score)}; ECE ${number.format(reliability.expected_calibration_error)}.` : ` Target draw share is not approval-calibrated (${escapeHtml(reliability.reason || 'insufficient event evidence')}).`; const caution = item.folds < 5 || !item.fold_windows_non_overlapping ? ' Treat coverage as directional, not a guarantee.' : ''; return `<p><strong>${item.horizon_days} days:</strong> ${Math.round(item.revenue_interval_coverage * 100)}% observed coverage for a nominal ${nominal}% P10-P90 interval across ${item.folds} historical folds; median WAPE ${Math.round(item.revenue_wape * 100)}%${comparison}.${calibration}${probabilityNote}${caution}</p>`; }).join('');
   byId('trust').innerHTML = `<div class="trust-summary"><h3>Rolling-origin backtest</h3>${lines}</div>`;
 }
 
 function renderChannels(channels) {
-  byId('channels').innerHTML = `<table><thead><tr><th>Channel</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">ROAS P50</th><th class="number">Guardrail</th></tr></thead><tbody>${channels.map((row) => `<tr><td>${row.channel}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td class="number">${Math.round(row.probability_roas_above_target * 100)}%</td></tr>`).join('')}</tbody></table>`;
+  byId('channels').innerHTML = `<table><thead><tr><th>Channel</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">ROAS P50</th><th class="number">Simulated draw share</th></tr></thead><tbody>${channels.map((row) => `<tr><td>${escapeHtml(row.channel)}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td class="number">${Math.round(row.probability_roas_above_target * 100)}%</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderCampaignTypes(types) {
-  byId('campaign-types').innerHTML = `<table><thead><tr><th>Channel / type</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">P10–P90</th><th class="number">ROAS P50</th></tr></thead><tbody>${types.map((row) => `<tr><td><strong>${escapeHtml(row.channel)}</strong><br><span class="table-muted">${escapeHtml(row.campaign_type)}</span></td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} – ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td></tr>`).join('')}</tbody></table>`;
+  byId('campaign-types').innerHTML = `<table><thead><tr><th>Channel / type</th><th class="number">Budget</th><th class="number">Revenue P50</th><th class="number">P10-P90</th><th class="number">ROAS P50</th></tr></thead><tbody>${types.map((row) => `<tr><td><strong>${escapeHtml(row.channel)}</strong><br><span class="table-muted">${escapeHtml(row.campaign_type)}</span></td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p50)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} - ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderCampaigns(campaigns) {
   const priority = [...campaigns].sort((left, right) => Number(right.predicted_revenue_p50) - Number(left.predicted_revenue_p50)).slice(0, 10);
-  byId('campaigns').innerHTML = `<table><thead><tr><th>Campaign</th><th>Type</th><th class="number">Budget</th><th class="number">Revenue P10–P90</th><th class="number">ROAS P50</th><th>Risk flags</th></tr></thead><tbody>${priority.map((row) => `<tr><td><strong>${escapeHtml(row.campaign_name)}</strong><br><span class="table-muted">${escapeHtml(row.channel)}</span></td><td>${escapeHtml(row.campaign_type)}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} – ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td>${escapeHtml(row.quality_flags || 'none')}</td></tr>`).join('')}</tbody></table>`;
+  byId('campaigns').innerHTML = `<table><thead><tr><th>Campaign</th><th>Type</th><th class="number">Budget</th><th class="number">Revenue P10-P90</th><th class="number">ROAS P50</th><th>Risk flags</th></tr></thead><tbody>${priority.map((row) => `<tr><td><strong>${escapeHtml(row.campaign_name)}</strong><br><span class="table-muted">${escapeHtml(row.channel)}</span></td><td>${escapeHtml(row.campaign_type)}</td><td class="number">${formatMoney(row.planned_budget)}</td><td class="number">${formatMoney(row.predicted_revenue_p10)} - ${formatMoney(row.predicted_revenue_p90)}</td><td class="number">${number.format(row.predicted_roas_p50)}</td><td>${escapeHtml(row.quality_flags || 'none')}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderAllocation(optimization, scenario) {
   const container = byId('allocation');
   if (!optimization) {
-    container.innerHTML = `<p class="allocation-empty">Run <strong>Recommend allocation</strong> to allocate the entered total budget under campaign support caps and channel constraints.</p>`;
+    container.innerHTML = `<p class="allocation-empty">Run <strong>Prioritize test allocation</strong> to create a shape-constrained plan under campaign support caps and channel constraints.</p>`;
     return;
   }
   const entries = Object.entries(optimization.campaign_budgets || {}).sort(([, left], [, right]) => Number(right) - Number(left)).slice(0, 8);
@@ -131,7 +154,10 @@ function renderAllocation(optimization, scenario) {
   const relaxed = optimization.target_constraint_status === 'marginal_target_relaxed';
   const targetLine = target == null ? 'No ROAS guardrail was requested.' : `Target ${number.format(target)}; blended P50 ROAS ${number.format(achieved)} (${number.format(optimization.target_gap_p50)} gap).`;
   const campaignCount = Object.keys((scenario || {}).campaign_budgets || {}).length;
-  container.innerHTML = `<p class="allocation-status"><strong>${escapeHtml(optimization.status)}</strong> <span class="badge ${relaxed ? 'warn' : ''}">${escapeHtml((optimization.target_constraint_status || 'not_requested').replaceAll('_', ' '))}</span><br>${escapeHtml(targetLine)}<br>${escapeHtml(optimization.explanation)}</p><p class="panel-note">The full ${number.format(campaignCount)}-campaign allocation is the exact scenario pinned for briefs and ledger saves; it is not reconstructed from rounded channel totals.</p><ol class="allocation-list">${entries.map(([campaign, budget]) => `<li><span>${escapeHtml(campaign)}</span><strong>${formatMoney(budget)}</strong></li>`).join('')}</ol>`;
+  const guardrail = Number(optimization.guardrailed_campaign_count || 0);
+  const eligible = Number(optimization.eligible_campaign_count || 0);
+  const method = String(optimization.allocation_method || 'conservative_monotone_concave_test_priority_v1').replaceAll('_', ' ');
+  container.innerHTML = `<p class="allocation-status"><strong>${escapeHtml(optimization.status)}</strong> <span class="badge ${relaxed ? 'warn' : ''}">${escapeHtml((optimization.target_constraint_status || 'not_requested').replaceAll('_', ' '))}</span><br>${escapeHtml(targetLine)}<br><strong>Policy:</strong> ${escapeHtml(method)}. ${number.format(eligible)} campaigns eligible for expansion; ${number.format(guardrail)} support-guardrailed.<br>${escapeHtml(optimization.explanation)}</p><p class="panel-note">The full ${number.format(campaignCount)}-campaign allocation is the exact scenario pinned for briefs and ledger saves; it is not reconstructed from rounded channel totals.</p><ol class="allocation-list">${entries.map(([campaign, budget]) => `<li><span>${escapeHtml(campaign)}</span><strong>${formatMoney(budget)}</strong></li>`).join('')}</ol>`;
 }
 
 function renderUncertainty(overall, initializing) {
@@ -146,12 +172,12 @@ function renderUncertainty(overall, initializing) {
     const p10 = x(value.predicted_revenue_p10), p50 = x(value.predicted_revenue_p50), p90 = x(value.predicted_revenue_p90);
     return `<text x="0" y="${y + 4}" class="chart-label">${label}</text><line x1="${p10}" x2="${p90}" y1="${y}" y2="${y}" class="chart-range"/><line x1="${p10}" x2="${p10}" y1="${y - 7}" y2="${y + 7}" class="chart-cap"/><line x1="${p90}" x2="${p90}" y1="${y - 7}" y2="${y + 7}" class="chart-cap"/><circle cx="${p50}" cy="${y}" r="6" class="chart-median"/><text x="${Math.min(p50 + 10, width - 84)}" y="${y + 4}" class="chart-value">${formatMoney(value.predicted_revenue_p50)}</text>`;
   };
-  byId('uncertainty-chart').innerHTML = `<svg viewBox="0 0 ${width} 126" role="img" aria-label="Revenue uncertainty ranges for baseline and current scenario">${rows.map(line).join('')}<text x="34" y="120" class="chart-note">Range = P10–P90; dot = P50. This is a conditional forecast, not a guarantee.</text></svg>`;
+  byId('uncertainty-chart').innerHTML = `<svg viewBox="0 0 ${width} 126" role="img" aria-label="Revenue uncertainty ranges for baseline and current scenario">${rows.map(line).join('')}<text x="34" y="120" class="chart-note">Range = P10-P90; dot = P50. This is a conditional forecast, not a guarantee.</text></svg>`;
 }
 
 function renderGuardrailDelta(overall, initializing) {
   if (initializing || !baselineOverall) {
-    byId('guardrail-delta').textContent = 'Baseline loaded. Change a channel budget and Simulate plan to see guardrail probability move.';
+    byId('guardrail-delta').textContent = 'Baseline loaded. Change a channel budget and Simulate plan to see the modeled guardrail draw share move.';
     byId('guardrail-delta').className = 'delta-banner';
     return;
   }
@@ -161,7 +187,7 @@ function renderGuardrailDelta(overall, initializing) {
   const revenueDelta = Number(overall.predicted_revenue_p50 || 0) - Number(baselineOverall.predicted_revenue_p50 || 0);
   const tone = delta < -0.01 ? 'warn' : (delta > 0.01 ? 'ok' : '');
   byId('guardrail-delta').className = `delta-banner ${tone}`;
-  byId('guardrail-delta').innerHTML = `<strong>Budget shock impact:</strong> Guardrail probability ${pct(before)} → ${pct(after)} (${signedPp(delta)}). Median revenue ${formatMoney(baselineOverall.predicted_revenue_p50)} → ${formatMoney(overall.predicted_revenue_p50)} (${revenueDelta >= 0 ? '+' : ''}${formatMoney(revenueDelta)}).`;
+  byId('guardrail-delta').innerHTML = `<strong>Budget shock impact:</strong> Simulated guardrail draw share ${pct(before)} to ${pct(after)} (${signedPp(delta)}). Median revenue ${formatMoney(baselineOverall.predicted_revenue_p50)} to ${formatMoney(overall.predicted_revenue_p50)} (${revenueDelta >= 0 ? '+' : ''}${formatMoney(revenueDelta)}). Draw share is a scenario diagnostic, not an approval-calibrated probability unless Trust Center reliability evidence says so.`;
 }
 
 function renderEvidence(evidence) {
@@ -169,13 +195,18 @@ function renderEvidence(evidence) {
   byId('headline').textContent = evidence.headline;
   const calibration = evidence.decision_gates?.calibration;
   const calibrationLine = calibration ? `<h3>Calibration gate</h3><p><strong>${escapeHtml(calibration.status.replaceAll('_', ' '))}</strong>${calibration.reasons?.length ? `: ${calibration.reasons.map(escapeHtml).join(' ')}` : '.'}</p>` : '';
-  byId('evidence').innerHTML = `<p>${evidence.causal_status.replaceAll('_', ' ')}</p>${calibrationLine}<h3>Top modeled contributors</h3><ul>${evidence.drivers.map((item) => `<li><strong>${item.channel}</strong>: ${formatMoney(item.expected_revenue)} expected revenue at ${number.format(item.expected_roas)} ROAS.</li>`).join('')}</ul><h3>Risks</h3><ul>${evidence.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul><h3>Recommended validation</h3><p>${escapeHtml(evidence.recommended_validation)}</p>`;
+  byId('evidence').innerHTML = `<p><strong>Evidence boundary:</strong> ${escapeHtml((evidence.causal_status || 'observational_association').replaceAll('_', ' '))}; forecast contributors are observational and not causal drivers.</p>${calibrationLine}<h3>Top modeled contributors</h3><ul>${evidence.drivers.map((item) => `<li><strong>${escapeHtml(item.channel)}</strong>: ${formatMoney(item.expected_revenue)} expected revenue at ${number.format(item.expected_roas)} ROAS.</li>`).join('')}</ul><h3>Risks</h3><ul>${evidence.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul><h3>Recommended validation</h3><p>${escapeHtml(evidence.recommended_validation)}</p>`;
 }
 
 function renderDecisionBrief(brief, mode, message) {
   const container = byId('decision-brief-output');
   const section = (title, items) => items && items.length ? `<h3>${title}</h3><ul>${items.map((item) => `<li>${escapeHtml(item.text)} <span class="citation">${(item.evidence_ids || []).map(escapeHtml).join(', ')}</span></li>`).join('')}</ul>` : '';
-  container.innerHTML = `<div class="decision-brief"><p class="eyebrow">${mode === 'openai_grounded_narrative' ? 'OPTIONAL LIVE NARRATIVE · EXPLICIT OPT-IN' : 'DETERMINISTIC DECISION BRIEF · NO LIVE LLM'}</p><h3 class="decision-brief-headline">${escapeHtml(brief.headline)}</h3><p class="causal-boundary">${escapeHtml((brief.causal_status || 'observational_association').replaceAll('_', ' '))}; a narrative cannot change forecast numbers.</p><p class="decision-brief-message">${escapeHtml(message || '')}</p>${section('Facts', brief.facts)}${section('Assumptions', brief.assumptions)}${section('Recommended validation', brief.recommendations)}${section('Limitations', brief.limitations)}</div>`;
+  const label = mode === 'openai_grounded_narrative'
+    ? 'OPTIONAL LIVE NARRATION / EXPLICIT NETWORK OPT-IN'
+    : (mode === 'deterministic_fallback'
+      ? 'DETERMINISTIC FALLBACK / NO LIVE LLM RESULT USED'
+      : 'DETERMINISTIC DECISION BRIEF / NO LIVE LLM');
+  container.innerHTML = `<div class="decision-brief"><p class="eyebrow">${label}</p><h3 class="decision-brief-headline">${escapeHtml(brief.headline)}</h3><p class="causal-boundary">${escapeHtml((brief.causal_status || 'observational_association').replaceAll('_', ' '))}; narration cannot change forecast numbers, decision posture, or allocation policy.</p><p class="decision-brief-message">${escapeHtml(message || '')}</p>${section('Facts', brief.facts)}${section('Assumptions', brief.assumptions)}${section('Recommended validation', brief.recommendations)}${section('Limitations', brief.limitations)}</div>`;
 }
 
 function render(response, initializing=false, requestFingerprint=null) {
@@ -222,6 +253,7 @@ async function requestScenario(initializing=false, optimize=false) {
     payload.channel_budgets = {...payload.channel_budgets, META_ADS: Number(byId('meta').value || 0), MICROSOFT_ADS: Number(byId('microsoft').value || 0)};
   }
   const requestFingerprint = inputFingerprint();
+  const requestId = ++scenarioRequestSequence;
   const optimizationPayload = optimize ? {
     horizon_days: payload.horizon_days,
     target_roas: payload.target_roas,
@@ -232,8 +264,11 @@ async function requestScenario(initializing=false, optimize=false) {
     const response = await fetch(initializing ? '/api/baseline' : (optimize ? '/api/optimize' : '/api/scenario'), {method: initializing ? 'GET' : 'POST', headers: {'Content-Type': 'application/json'}, body: initializing ? undefined : JSON.stringify(optimizationPayload)});
     const body = await response.json();
     if (!response.ok) throw new Error(body.error?.message || 'Scenario request failed');
+    if (requestId !== scenarioRequestSequence) return;
     render(body, initializing, requestFingerprint);
-  } catch (error) { setNotice(error.message, 'error'); }
+  } catch (error) {
+    if (requestId === scenarioRequestSequence) setNotice(error.message, 'error');
+  }
 }
 
 async function loadTrust() {
@@ -254,17 +289,29 @@ async function saveDecision() {
   } catch (error) { setNotice(error.message, 'error'); }
 }
 
-async function requestDecisionBrief() {
-  if (!requireCurrentScenario('generating a decision brief')) return;
-  const button = byId('decision-brief');
-  button.disabled = true;
-  setNotice('Generating deterministic decision brief from sealed forecast evidence…', 'loading');
+async function requestDecisionBrief(preferLiveNarration=false) {
+  if (!requireCurrentScenario(preferLiveNarration ? 'generating grounded AI narration' : 'generating a decision brief')) return;
+  const requestId = ++briefRequestSequence;
+  const scenarioSnapshot = copyScenario(latestScenario);
+  const scenarioFingerprint = latestScenarioInputFingerprint;
+  const button = byId(preferLiveNarration ? 'live-decision-brief' : 'decision-brief');
+  byId('decision-brief').disabled = true;
+  byId('live-decision-brief').disabled = true;
+  setNotice(
+    preferLiveNarration
+      ? 'Requesting optional live narration from sealed evidence. A deterministic brief will remain if narration is unavailable…'
+      : 'Generating deterministic decision brief from sealed forecast evidence…',
+    'loading',
+  );
   try {
-    // The visible demo action always selects the local, deterministic path.
-    // A live narrator requires a separate explicit API request with boolean true.
-    const response = await fetch('/api/evidence', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({scenario:copyScenario(latestScenario), prefer_live_llm: false})});
+    const response = await fetch('/api/evidence', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({scenario:scenarioSnapshot, prefer_live_llm: Boolean(preferLiveNarration)})});
     const body = await response.json();
     if (!response.ok) throw new Error(body.error?.message || 'Unable to generate decision brief');
+    if (requestId !== briefRequestSequence) return;
+    if (scenarioIsStale || latestScenarioInputFingerprint !== scenarioFingerprint) {
+      setNotice('Inputs changed while the brief was being generated. Its old-scenario result was not displayed; re-run the scenario first.', 'warn');
+      return;
+    }
     const brief = body.brief || {
       decision: (body.deterministic_evidence || latestEvidence || {}).decision,
       causal_status: (body.deterministic_evidence || latestEvidence || {}).causal_status,
@@ -276,17 +323,38 @@ async function requestDecisionBrief() {
     };
     renderDecisionBrief(brief, body.mode, body.message);
     setNotice(body.message || 'Deterministic decision brief ready. Forecast numbers were not altered.', 'ok');
-  } catch (error) { setNotice(error.message, 'error'); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    if (requestId === briefRequestSequence) setNotice(error.message, 'error');
+  }
+  finally {
+    if (requestId === briefRequestSequence) {
+      button.disabled = false;
+      renderScenarioState();
+      renderNarrationAvailability();
+    }
+  }
+}
+
+async function loadNarrationStatus() {
+  try {
+    const response = await fetch('/api/evidence-status');
+    if (!response.ok) throw new Error('Unable to load narration status');
+    narrationStatus = await response.json();
+  } catch (_) {
+    narrationStatus = {configured: false, live_narration_server_enabled: false};
+  }
+  renderNarrationAvailability();
 }
 
 byId('forecast').addEventListener('click', () => requestScenario(false));
 byId('optimize').addEventListener('click', () => requestScenario(false, true));
 byId('save').addEventListener('click', saveDecision);
-byId('decision-brief').addEventListener('click', requestDecisionBrief);
+byId('decision-brief').addEventListener('click', () => requestDecisionBrief(false));
+byId('live-decision-brief').addEventListener('click', () => requestDecisionBrief(true));
 for (const id of ['horizon', 'target', 'google', 'meta', 'microsoft']) {
   byId(id).addEventListener('input', markScenarioStale);
   byId(id).addEventListener('change', markScenarioStale);
 }
 requestScenario(true);
 loadTrust();
+loadNarrationStatus();

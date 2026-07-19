@@ -1,9 +1,19 @@
 {
-  "artifact_sha256": "7f88607a703d529564432a0fa43c99cf2b9669b93948fef67ffffcf5795d83fa",
-  "model_version": "horizon-direct-ridge-v5-oof-factor-copula",
-  "artifact_build_python_major_minor": "3.12",
+  "artifact_build_python_major_minor": "3.11",
+  "artifact_sha256": "ca195a817345c431fc37d6ce0df3a4f87fc70d36ce7329b7c9b9665f3dd72cd2",
+  "canonical_date_end": "2026-06-05",
+  "canonical_date_start": "2024-01-01",
+  "canonical_rows": 25562,
+  "feature_schema_fingerprint": "60c163139a20a98d2e80ec73a4dee0c3e022b27d0586e209a9a3b78ce5bc5483",
   "minimum_python_major_minor": "3.11",
+  "model_version": "horizon-temporal-tournament-v8-calendar-plan-oof-intervals",
   "purpose": "Trusted, pre-trained offline inference artifact for the protected hackathon path.",
-  "training_data_fingerprint": "e2778df8a45675c6d182173d5400e98339ca6cbf3f8554292faa27dff20a01f4",
-  "feature_schema_fingerprint": "f51e8603f9cc1710fd9f7c873163912b52f399afdda92c33a1aa0fce5d520a32"
+  "schema_version": "horizon-submission-model-manifest-v2",
+  "source_systems": [
+    "google_ads",
+    "meta_ads",
+    "microsoft_ads"
+  ],
+  "trainer": "product.scripts.promote_submission_model",
+  "training_data_fingerprint": "17ecd5954e202544e085896db172969c59f095957415b23b9e2b5f95619cf7a1"
 }

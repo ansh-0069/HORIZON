@@ -40,6 +40,11 @@ else
   exit 127
 fi
 
+if ! "${PYTHON_COMMAND[@]}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "Python 3.11 or newer is required; selected interpreter is too old." >&2
+  exit 65
+fi
+
 "${PYTHON_COMMAND[@]}" -m src.predict \
   --data-dir "$DATA_DIR" \
   --model "$MODEL_PATH" \

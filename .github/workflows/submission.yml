@@ -26,3 +26,5 @@ jobs:
         run: python -m unittest discover -s product/tests -q
       - name: Execute the exact evaluator command
         run: ./run.sh ./data ./pickle/model.pkl ./output/predictions.csv
+      - name: Verify locked horizon-v1 output contract
+        run: python -m product.scripts.verify_evaluator_contract --predictions ./output/predictions.csv

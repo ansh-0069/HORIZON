@@ -69,6 +69,21 @@ class HorizonPipelineTests(unittest.TestCase):
                     "revenue_interval_coverage": 0.80,
                     "roas_interval_coverage": 0.70,
                     "nominal_interval_coverage": 0.80,
+                    "revenue_wape": 0.40,
+                    "coverage_by_hierarchy": {
+                        "campaign": {
+                            "revenue_interval_coverage": 0.70,
+                            "roas_interval_coverage": 0.60,
+                            "missing_forecast_observations": 2,
+                            "revenue_coverage_observations": 100,
+                        }
+                    },
+                    "roas_target_probability_reliability": {
+                        "status": "evaluated",
+                        "observations": 30,
+                        "brier_score": 0.12,
+                        "expected_calibration_error": 0.06,
+                    },
                 }
             ],
         }
@@ -107,26 +122,39 @@ class HorizonPipelineTests(unittest.TestCase):
         forecast = build_forecast(self.model, self.canonical, 60)
         overall = forecast[forecast["level"] == "overall"].iloc[0]
         leaves = forecast[forecast["level"] == "campaign"]
-        # Dependence-aware paths determine the portfolio interval, while the
-        # centered portfolio OOF residual calibration preserves the additive P50 point
-        # forecast used for model selection and WAPE.
+        # The serving family is selected before artifact promotion.  A direct
+        # winner carries its calibrated residual-dependence profile; a
+        # statistical winner must explicitly use the safer independent-rank
+        # rollup rather than inheriting a direct candidate's copula profile.
         self.assertAlmostEqual(float(overall["planned_budget"]), float(leaves["planned_budget"].sum()), places=6)
         self.assertAlmostEqual(float(overall["predicted_revenue_p50"]), float(leaves["predicted_revenue_p50"].sum()), places=6)
-        self.assertIn("historical_residual_factor_copula_rollup", str(overall["quality_flags"]))
-        self.assertIn("portfolio_oof_residual_calibration", str(overall["quality_flags"]))
+        selected_family = self.model.selected_model_family(60)
+        flags = str(overall["quality_flags"])
+        if selected_family == "direct_ensemble":
+            self.assertIn("historical_residual_factor_copula_rollup", flags)
+            self.assertIn("portfolio_oof_residual_calibration", flags)
+        else:
+            self.assertEqual(selected_family, "statistical_fallback")
+            self.assertIn("independent_rank_rollup_fallback", flags)
+            self.assertNotIn("historical_residual_factor_copula_rollup", flags)
+            self.assertNotIn("portfolio_oof_residual_calibration", flags)
         self.assertTrue((forecast["predicted_revenue_p10"] <= forecast["predicted_revenue_p50"]).all())
         self.assertTrue((forecast["predicted_revenue_p50"] <= forecast["predicted_revenue_p90"]).all())
         self.assertTrue((forecast["predicted_spend_p10"] <= forecast["predicted_spend_p50"]).all())
         self.assertTrue((forecast["predicted_spend_p50"] <= forecast["predicted_spend_p90"]).all())
         self.assertTrue(((forecast["probability_roas_above_target"] >= 0) & (forecast["probability_roas_above_target"] <= 1)).all())
 
-    def test_direct_model_carries_a_historical_residual_dependence_profile(self) -> None:
+    def test_only_a_selected_direct_model_carries_a_historical_residual_dependence_profile(self) -> None:
         profile = self.model.dependence_for_horizon(60)
-        self.assertEqual(profile["method"], "hierarchical_residual_factor_copula_v1")
-        self.assertGreater(int(profile["sample_count"]), 0)
-        self.assertGreater(int(profile["block_count"]), 0)
-        weights = profile["factor_weights"]
-        self.assertAlmostEqual(sum(float(weights[name]) for name in ("global", "channel", "campaign_type", "idiosyncratic")), 1.0, places=6)
+        if self.model.selected_model_family(60) == "direct_ensemble":
+            self.assertEqual(profile["method"], "hierarchical_residual_factor_copula_v1")
+            self.assertGreater(int(profile["sample_count"]), 0)
+            self.assertGreater(int(profile["block_count"]), 0)
+            weights = profile["factor_weights"]
+            self.assertAlmostEqual(sum(float(weights[name]) for name in ("global", "channel", "campaign_type", "idiosyncratic")), 1.0, places=6)
+        else:
+            self.assertEqual(self.model.selected_model_family(60), "statistical_fallback")
+            self.assertEqual(profile, {})
 
     def test_spend_intervals_use_historical_delivery_uncertainty(self) -> None:
         leaves = self.model.forecast_campaigns(self.canonical, 30)
@@ -389,7 +417,20 @@ class HorizonPipelineTests(unittest.TestCase):
     def test_direct_models_use_temporal_calibration_windows(self) -> None:
         for model in self.model.direct_models.values():
             self.assertGreater(model.calibration_sample_count, 0)
-            self.assertEqual(model.uncertainty_method, "purged_temporal_holdout_residual_quantiles_v2")
+            if hasattr(model, "scenario_model"):
+                self.assertEqual(model.uncertainty_method, "purged_temporal_selected_two_expert_ensemble_v1")
+                self.assertGreater(model.scenario_model.calibration_sample_count, 0)
+                self.assertGreater(model.inference_aligned_model.calibration_sample_count, 0)
+                self.assertEqual(
+                    model.scenario_model.uncertainty_method,
+                    "purged_temporal_holdout_support_aware_residual_quantiles_v3",
+                )
+                self.assertEqual(
+                    model.inference_aligned_model.uncertainty_method,
+                    "purged_temporal_holdout_inference_aligned_residual_quantiles_v1",
+                )
+            else:
+                self.assertEqual(model.uncertainty_method, "purged_temporal_holdout_support_aware_residual_quantiles_v3")
 
     def test_output_adapter_preserves_existing_csv_when_serialization_fails(self) -> None:
         forecast = build_forecast(self.model, self.canonical, 30)

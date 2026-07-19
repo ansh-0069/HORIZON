@@ -2,23 +2,33 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from product.training.model_builder import fit_horizon_model
+from src.contracts import CANONICAL_COLUMNS
 from src.forecast import build_forecast
 
 
-EVALUATION_REPORT_SCHEMA_VERSION = "horizon-evaluation-v2"
+EVALUATION_REPORT_SCHEMA_VERSION = "horizon-evaluation-v3"
 DEFAULT_EVALUATION_FOLDS = 6
-DEFAULT_EVALUATION_STEP_DAYS = 30
+# ``None`` resolves to the evaluated horizon.  This keeps primary target
+# windows non-overlapping, rather than treating correlated 60/90-day outcomes
+# as independent Bernoulli trials in coverage confidence intervals.
+DEFAULT_EVALUATION_STEP_DAYS: int | None = None
 EVALUATION_HORIZONS = (30, 60, 90)
+MINIMUM_TARGET_PROBABILITY_OBSERVATIONS = 20
 
 
 def canonical_fingerprint(canonical: pd.DataFrame) -> str:
-    columns = ["source_system", "source_campaign_id", "date", "channel", "campaign_type", "campaign_name", "spend", "revenue"]
+    # Decision uncertainty depends on configured budgets and quality semantics
+    # in addition to revenue-model features. Hash the whole canonical contract
+    # so a trust report cannot be reused after any inference-relevant source
+    # field has changed.
+    columns = list(CANONICAL_COLUMNS)
     # Sorting every serialized field makes the provenance hash invariant to
     # source-file row order even if an upstream system emits duplicate
     # identity/date rows with different measured values.
@@ -214,11 +224,78 @@ def _coverage_summary(records: list[dict[str, object]]) -> dict[str, dict[str, o
     return summary
 
 
+def _target_probability_reliability(rows: list[dict[str, Any]]) -> dict[str, object]:
+    """Evaluate the ROAS-target draw share as an empirical event probability.
+
+    Forecast draw frequency is not automatically a calibrated probability.
+    This diagnostic records Brier score, reliability bins, and evidence volume
+    separately from interval coverage so serving can decline approval when
+    there is no basis to treat a simulated draw share as decision-grade.
+    """
+    pairs: list[tuple[float, float]] = []
+    for row in rows:
+        probability = row.get("modeled_target_probability")
+        outcome = row.get("actual_target_hit")
+        if isinstance(probability, bool) or not isinstance(probability, (int, float)):
+            continue
+        if isinstance(outcome, bool):
+            value = float(outcome)
+        elif isinstance(outcome, (int, float)) and not isinstance(outcome, bool):
+            value = float(outcome)
+        else:
+            continue
+        probability_value = float(probability)
+        if math.isfinite(probability_value) and math.isfinite(value):
+            pairs.append((min(1.0, max(0.0, probability_value)), 1.0 if value >= 0.5 else 0.0))
+    if not pairs:
+        return {
+            "status": "unavailable",
+            "observations": 0,
+            "reason": "No finite actual ROAS target events were available for reliability scoring.",
+        }
+    probabilities = [pair[0] for pair in pairs]
+    outcomes = [pair[1] for pair in pairs]
+    brier = sum((probability - outcome) ** 2 for probability, outcome in pairs) / len(pairs)
+    bin_edges = ((0.0, 0.25), (0.25, 0.50), (0.50, 0.75), (0.75, 1.0000001))
+    bins: list[dict[str, object]] = []
+    ece = 0.0
+    for lower, upper in bin_edges:
+        indices = [index for index, probability in enumerate(probabilities) if lower <= probability < upper]
+        if not indices:
+            continue
+        mean_probability = sum(probabilities[index] for index in indices) / len(indices)
+        observed_rate = sum(outcomes[index] for index in indices) / len(indices)
+        ece += len(indices) / len(pairs) * abs(mean_probability - observed_rate)
+        bins.append(
+            {
+                "range": f"[{lower:.2f}, {min(upper, 1.0):.2f}{']' if upper > 1.0 else ')'}",
+                "observations": len(indices),
+                "mean_modeled_probability": round(mean_probability, 4),
+                "observed_target_hit_rate": round(observed_rate, 4),
+            }
+        )
+    status = "evaluated" if len(pairs) >= MINIMUM_TARGET_PROBABILITY_OBSERVATIONS else "insufficient_evidence"
+    payload: dict[str, object] = {
+        "status": status,
+        "observations": len(pairs),
+        "brier_score": round(brier, 4),
+        "expected_calibration_error": round(ece, 4),
+        "bins": bins,
+        "target_definition": "actual_horizon_revenue / actual_horizon_spend >= model target_roas",
+    }
+    if status != "evaluated":
+        payload["reason"] = (
+            f"At least {MINIMUM_TARGET_PROBABILITY_OBSERVATIONS} non-overlapping target events are required "
+            "before this draw share can be used as a calibrated approval probability."
+        )
+    return payload
+
+
 def rolling_origin_backtest(
     canonical: pd.DataFrame,
     horizon_days: int,
     folds: int = DEFAULT_EVALUATION_FOLDS,
-    step_days: int = DEFAULT_EVALUATION_STEP_DAYS,
+    step_days: int | None = DEFAULT_EVALUATION_STEP_DAYS,
     train_direct: bool = True,
 ) -> dict[str, Any]:
     """Evaluate one horizon with chronological, leakage-safe forecast origins."""
@@ -226,13 +303,14 @@ def rolling_origin_backtest(
         raise ValueError(f"Unsupported evaluation horizon: {horizon_days}")
     if folds < 1:
         raise ValueError("folds must be at least 1")
-    if step_days < 1:
+    resolved_step_days = horizon_days if step_days is None else step_days
+    if resolved_step_days < 1:
         raise ValueError("step_days must be at least 1")
     latest = canonical["date"].max()
     rows: list[dict[str, Any]] = []
     hierarchy_records: list[dict[str, object]] = []
     for fold in range(folds, 0, -1):
-        cutoff = latest - pd.Timedelta(days=horizon_days + (fold - 1) * step_days)
+        cutoff = latest - pd.Timedelta(days=horizon_days + (fold - 1) * resolved_step_days)
         train = canonical[canonical["date"] <= cutoff].copy()
         actual = canonical[(canonical["date"] > cutoff) & (canonical["date"] <= cutoff + pd.Timedelta(days=horizon_days))]
         if train["date"].nunique() < 90 or actual.empty:
@@ -272,6 +350,9 @@ def rolling_origin_backtest(
                 or canonical_fingerprint(train)
             ),
             "feature_schema_fingerprint": str(getattr(model, "feature_schema_fingerprint", "")),
+            "target_roas": float(model.target_roas),
+            "modeled_target_probability": float(overall["probability_roas_above_target"]),
+            "actual_target_hit": None if actual_roas is None else bool(actual_roas >= float(model.target_roas)),
         })
     if not rows:
         raise ValueError(f"Insufficient history for {horizon_days}-day rolling-origin backtest")
@@ -289,7 +370,8 @@ def rolling_origin_backtest(
     return {
         "horizon_days": horizon_days,
         "requested_folds": folds,
-        "step_days": step_days,
+        "step_days": resolved_step_days,
+        "fold_windows_non_overlapping": bool(resolved_step_days >= horizon_days),
         "folds": len(frame),
         "revenue_interval_coverage": round(float(coverage), 4),
         "revenue_interval_coverage_95_ci": _wilson_interval(revenue_successes, len(frame)),
@@ -305,6 +387,7 @@ def rolling_origin_backtest(
             str(value) for value in frame["feature_schema_fingerprint"].unique() if str(value)
         ),
         "coverage_by_hierarchy": _coverage_summary(hierarchy_records),
+        "roas_target_probability_reliability": _target_probability_reliability(rows),
         "fold_results": rows,
     }
 
@@ -343,7 +426,8 @@ def evaluate_all_horizons(canonical: pd.DataFrame, folds: int = DEFAULT_EVALUATI
             "name": "rolling_origin_prequential_backtest_v2",
             "default_folds": DEFAULT_EVALUATION_FOLDS,
             "requested_folds": folds,
-            "step_days": DEFAULT_EVALUATION_STEP_DAYS,
+            "step_days": "horizon_days (non-overlapping primary target windows)",
+            "fold_dependence_note": "Target windows do not overlap; expanding training histories still share prior observations, so intervals are descriptive rather than independent-trial guarantees.",
             "horizons_days": list(EVALUATION_HORIZONS),
             "candidate_training": "Each fold uses only canonical rows at or before its forecast origin.",
             "interval_calibration": "Direct-model residual quantiles use a purged later temporal holdout; no in-sample fallback is accepted.",

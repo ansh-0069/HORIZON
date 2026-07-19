@@ -15,6 +15,15 @@ PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PRODUCT_ROOT.parent
 LOGGER = logging.getLogger("horizon.planner")
 LOCAL_ONLY_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+LOCAL_DEMO_CSP = (
+    "default-src 'self'; "
+    "base-uri 'none'; "
+    "connect-src 'self'; "
+    "img-src 'self' data:; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "frame-ancestors 'none'"
+)
 
 
 def validate_live_llm_host(host: str, enabled: bool) -> None:
@@ -36,6 +45,19 @@ def make_handler(service: PlannerService):
     class PlannerHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(PRODUCT_ROOT / "frontend"), **kwargs)
+
+        def end_headers(self) -> None:
+            """Keep the local demo single-origin and prevent stale API evidence.
+
+            The browser never talks directly to an LLM provider.  A restrictive
+            CSP makes that boundary observable: all API calls must stay on the
+            local planner origin, even when optional narration is enabled.
+            """
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Security-Policy", LOCAL_DEMO_CSP)
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            super().end_headers()
 
         def _json(self, status: int, payload: dict) -> None:
             body = json.dumps(payload, allow_nan=False).encode("utf-8")
@@ -72,6 +94,9 @@ def make_handler(service: PlannerService):
                 self._json(HTTPStatus.NOT_FOUND, {"error": {"code": "NOT_FOUND", "message": "Unknown endpoint"}})
                 return
             try:
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if content_type != "application/json":
+                    raise ValueError("Content-Type must be application/json")
                 length = int(self.headers.get("Content-Length", "0"))
                 if length <= 0 or length > 100_000:
                     raise ValueError("Request body must be a JSON object smaller than 100 KB")
@@ -107,6 +132,13 @@ def make_handler(service: PlannerService):
                     },
                 )
 
+        def do_OPTIONS(self) -> None:
+            # No cross-origin API surface is part of the local prototype.
+            self._json(
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                {"error": {"code": "METHOD_NOT_ALLOWED", "message": "Cross-origin requests are not supported"}},
+            )
+
         def log_message(self, fmt: str, *args) -> None:
             # Standard request logging avoids ad-hoc prints while retaining a
             # useful local-demo audit trail. Request bodies are never logged.
@@ -124,7 +156,10 @@ def main() -> None:
     parser.add_argument(
         "--enable-live-llm",
         action="store_true",
-        help="Allow the optional live narrator for explicit API requests on localhost only.",
+        help=(
+            "Allow optional live narration only after an explicit browser action on localhost. "
+            "Forecasting and deterministic briefs remain offline and do not need this flag."
+        ),
     )
     args = parser.parse_args()
     try:

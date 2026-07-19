@@ -171,22 +171,26 @@ def _dependence_percentile_paths(
 
 
 def _portfolio_oof_residual_profile(model: HorizonModel, horizon_days: int) -> dict[str, float] | None:
-    """Validate the empirical OOF portfolio-residual calibration profile."""
+    """Return a validated OOF portfolio revenue-interval profile.
+
+    Direct ensembles persist their profile under residual-dependence metadata.
+    The statistical fallback uses a separate, explicitly revenue-interval-only
+    profile. Neither path represents calibration of ROAS-target probability.
+    """
     profile = model.dependence_for_horizon(horizon_days)
     calibration = profile.get("portfolio_oof_residual_calibration", {}) if isinstance(profile, dict) else {}
-    if not isinstance(calibration, dict):
-        return None
-    if calibration.get("method") != "expanding_window_oof_portfolio_log_residual_quantiles_v1":
-        return None
-    try:
-        values = {name: float(calibration[name]) for name in ("residual_p10", "residual_p50", "residual_p90")}
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not all(math.isfinite(value) for value in values.values()):
-        return None
-    if values["residual_p10"] > values["residual_p50"] or values["residual_p50"] > values["residual_p90"]:
-        return None
-    return values
+    if isinstance(calibration, dict) and calibration.get("method") == "expanding_window_oof_portfolio_log_residual_quantiles_v1":
+        try:
+            values = {name: float(calibration[name]) for name in ("residual_p10", "residual_p50", "residual_p90")}
+        except (KeyError, TypeError, ValueError):
+            values = {}
+        if (
+            values
+            and all(math.isfinite(value) for value in values.values())
+            and values["residual_p10"] <= values["residual_p50"] <= values["residual_p90"]
+        ):
+            return values
+    return model.fallback_portfolio_interval_profile(horizon_days)
 
 
 def _portfolio_oof_residual_recalibration(
@@ -228,9 +232,10 @@ def _portfolio_oof_residual_recalibration(
             residual = (1.0 - fraction) * calibration["residual_p50"] + fraction * calibration["residual_p90"]
         else:
             residual = calibration["residual_p90"]
-        # Preserve the model's P50 point forecast. The OOF median captures
-        # historical bias; subtracting it turns residual quantiles into an
-        # uncertainty spread rather than silently shifting the point estimate.
+    # Preserve the model's P50 point forecast. The OOF median captures
+    # historical bias; subtracting it turns residual quantiles into a revenue
+    # interval spread rather than silently shifting the point estimate. This
+    # intentionally makes no claim that ROAS-target probability is calibrated.
         centered_residual = residual - calibration["residual_p50"]
         adjusted[index] = max(0.0, math.expm1(math.log1p(point) + centered_residual))
     return adjusted, True
@@ -417,6 +422,13 @@ def build_forecast(
         horizon_days,
         float(leaves["predicted_revenue_p50"].sum()),
     )
+    # This describes revenue-interval recalibration only. It must never be
+    # interpreted as a calibrated probability of clearing the ROAS target.
+    portfolio_calibration_flag = (
+        "fallback_portfolio_oof_revenue_interval_calibration"
+        if model.selected_model_family(horizon_days) == "statistical_fallback"
+        else "portfolio_oof_residual_calibration"
+    ) if portfolio_oof_residual_applied else ""
 
     leaf_rows: list[dict[str, object]] = []
     for index, leaf in leaves.iterrows():
@@ -434,14 +446,20 @@ def build_forecast(
                     "campaign_name": leaf["campaign_name"],
                     "campaign_key": leaf["campaign_key"],
                 },
-                f"{leaf['quality_flags']};additive_p50_reconciled",
+                ";".join(
+                    value
+                    for value in (str(leaf["quality_flags"]), portfolio_calibration_flag, "additive_p50_reconciled")
+                    if value
+                ),
                 revenue_p50_override=float(leaf["predicted_revenue_p50"]),
             )
         )
         leaf_rows[-1]["_draw_index"] = int(index)
 
     leaf_frame = pd.DataFrame(leaf_rows)
-    aggregate_quality_flags = f"{rollup_flag};additive_p50_reconciled"
+    aggregate_quality_flags = ";".join(
+        value for value in (rollup_flag, portfolio_calibration_flag, "additive_p50_reconciled") if value
+    )
     campaign_type_rows = _aggregate_level(
         leaf_frame,
         leaf_revenue,
@@ -462,7 +480,7 @@ def build_forecast(
     )
     overall_revenue = np.sum(leaf_revenue, axis=0)
     overall_quality_flags = (
-        f"{rollup_flag};portfolio_oof_residual_calibration;additive_p50_reconciled"
+        f"{rollup_flag};{portfolio_calibration_flag};additive_p50_reconciled"
         if portfolio_oof_residual_applied
         else f"{rollup_flag};additive_p50_reconciled"
     )

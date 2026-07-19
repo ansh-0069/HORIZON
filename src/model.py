@@ -3,7 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import pandas as pd
-from src.direct_model import DirectRidgeModel, inference_features
+from src.budget_plan import campaign_baseline_budget, seasonal_default_budget_multiplier
+from src.direct_model import DirectRidgeEnsembleModel, DirectRidgeModel, inference_features
+
+
+# This string is intentionally duplicated in the training module instead of
+# importing training-only code into the protected evaluator path.  The profile
+# itself is plain pickle data, and this marker lets inference reject malformed
+# or stale calibration metadata safely.
+FALLBACK_INTERVAL_CALIBRATION_METHOD = "expanding_window_oof_statistical_campaign_interval_width_conformal_v1"
+FALLBACK_PORTFOLIO_INTERVAL_CALIBRATION_METHOD = "expanding_window_oof_statistical_portfolio_log_residual_quantiles_v1"
 
 
 @dataclass
@@ -12,7 +21,7 @@ class HorizonModel:
     global_roas: float
     global_log_sigma: float
     month_roas_factors: dict[int, float]
-    direct_models: dict[int, DirectRidgeModel]
+    direct_models: dict[int, DirectRidgeModel | DirectRidgeEnsembleModel]
     min_history_days: int = 28
     target_roas: float = 4.0
     artifact_sha256: str = ""
@@ -21,6 +30,17 @@ class HorizonModel:
     # contract and one-hot feature schema without importing product code.
     training_data_fingerprint: str = ""
     feature_schema_fingerprint: str = ""
+    # A training-only temporal tournament may retain direct candidates while
+    # selecting the conservative statistical family for a particular horizon.
+    # Legacy artifacts default to direct serving so their historical behavior
+    # remains stable after this field was introduced.
+    selected_model_families: dict[int, str] = field(default_factory=dict)
+    model_selection: dict[int, dict[str, object]] = field(default_factory=dict)
+    # Statistical fallback intervals are calibrated offline from expanding,
+    # non-overlapping forecast origins.  The persisted profile scales only the
+    # distance from P50 to P10/P90; point forecasts remain exactly unchanged.
+    # Keeping it optional preserves compatibility with legacy pickle artifacts.
+    fallback_interval_calibration: dict[int, dict[str, object]] = field(default_factory=dict)
     # Trained outside the protected evaluator path.  The field is deliberately
     # optional so artifacts created before dependence calibration remain
     # loadable; inference uses an explicit independent fallback for those
@@ -29,7 +49,12 @@ class HorizonModel:
 
     def __getattr__(self, name: str) -> object:
         """Supply defaults for fields absent from pre-v4 pickle artifacts."""
-        if name == "residual_dependence":
+        if name in {
+            "residual_dependence",
+            "selected_model_families",
+            "model_selection",
+            "fallback_interval_calibration",
+        }:
             return {}
         if name in {"training_data_fingerprint", "feature_schema_fingerprint"}:
             return ""
@@ -44,11 +69,102 @@ class HorizonModel:
         are data-only dictionaries so they can be safely checked and evolved
         without importing training-only code during inference.
         """
+        if self.selected_model_family(horizon_days) != "direct_ensemble":
+            return {}
         profiles = getattr(self, "residual_dependence", {})
         if not isinstance(profiles, dict):
             return {}
         profile = profiles.get(horizon_days, profiles.get(str(horizon_days), {}))
         return dict(profile) if isinstance(profile, dict) else {}
+
+    def selected_model_family(self, horizon_days: int) -> str:
+        """Return the serving family selected by an offline temporal tournament."""
+        families = getattr(self, "selected_model_families", {})
+        if not isinstance(families, dict):
+            return "direct_ensemble"
+        selected = families.get(horizon_days, families.get(str(horizon_days), "direct_ensemble"))
+        return str(selected) if selected in {"direct_ensemble", "statistical_fallback"} else "direct_ensemble"
+
+    def fallback_interval_width_multipliers(self, horizon_days: int) -> tuple[float, float] | None:
+        """Return validated offline width scales for statistical fallback leaves.
+
+        This method deliberately does no calibration at inference.  It only
+        validates training-produced, data-only metadata and returns a safe
+        ``None`` for legacy, malformed, direct-serving, or insufficient-data
+        profiles.  Both widths are bounded at one or above so the calibration
+        can widen an under-covered fallback interval but can never turn an
+        already conservative interval into a narrower one at runtime.
+        """
+        if self.selected_model_family(horizon_days) != "statistical_fallback":
+            return None
+        profiles = getattr(self, "fallback_interval_calibration", {})
+        if not isinstance(profiles, dict):
+            return None
+        profile = profiles.get(horizon_days, profiles.get(str(horizon_days), {}))
+        if not isinstance(profile, dict):
+            return None
+        if profile.get("method") != FALLBACK_INTERVAL_CALIBRATION_METHOD:
+            return None
+        if profile.get("status") != "available":
+            return None
+        try:
+            origin_count = int(profile["origin_count"])
+            sample_count = int(profile["sample_count"])
+            lower = float(profile["lower_width_multiplier"])
+            upper = float(profile["upper_width_multiplier"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if profile.get("calibration_level") != "campaign_marginal" or origin_count < 5 or sample_count < 30:
+            return None
+        # The trainer caps multipliers at 4.0. Recheck it here because an
+        # artifact is an input boundary in the protected submission path.
+        if not all(math.isfinite(value) and 1.0 <= value <= 4.0 for value in (lower, upper)):
+            return None
+        return lower, upper
+
+    def fallback_portfolio_interval_profile(self, horizon_days: int) -> dict[str, float] | None:
+        """Return a validated OOF portfolio *revenue interval* profile.
+
+        The profile is deliberately distinct from ROAS-target probability
+        calibration. It contains only centered aggregate revenue residual
+        quantiles, fitted outside the evaluator from non-overlapping temporal
+        origins. Invalid, sparse, direct-serving, or legacy metadata fails
+        closed so protected inference never estimates uncertainty at runtime.
+        """
+        if self.selected_model_family(horizon_days) != "statistical_fallback":
+            return None
+        profiles = getattr(self, "fallback_interval_calibration", {})
+        if not isinstance(profiles, dict):
+            return None
+        parent = profiles.get(horizon_days, profiles.get(str(horizon_days), {}))
+        if not isinstance(parent, dict):
+            return None
+        profile = parent.get("portfolio_interval_profile", {})
+        if not isinstance(profile, dict):
+            return None
+        if profile.get("method") != FALLBACK_PORTFOLIO_INTERVAL_CALIBRATION_METHOD:
+            return None
+        if profile.get("status") != "available":
+            return None
+        if profile.get("calibration_purpose") != "revenue_interval_only_not_roas_probability_calibration":
+            return None
+        try:
+            origin_count = int(profile["origin_count"])
+            residual_p10 = float(profile["residual_p10"])
+            residual_p50 = float(profile["residual_p50"])
+            residual_p90 = float(profile["residual_p90"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        values = (residual_p10, residual_p50, residual_p90)
+        if origin_count < 5 or not all(math.isfinite(value) for value in values):
+            return None
+        if residual_p10 > residual_p50 or residual_p50 > residual_p90:
+            return None
+        return {
+            "residual_p10": residual_p10,
+            "residual_p50": residual_p50,
+            "residual_p90": residual_p90,
+        }
 
     @staticmethod
     def campaign_key(source_system: object, campaign_id: object) -> str:
@@ -70,22 +186,7 @@ class HorizonModel:
         a deterministic *budget default*, not a revenue feature or an override
         of a planner-provided scenario.
         """
-        if horizon_days != 90:
-            return 1.0
-        recent_start = as_of - pd.Timedelta(days=27)
-        recent = canonical[(canonical["date"] >= recent_start) & (canonical["date"] <= as_of)]
-        recent_daily_spend = float(recent["spend"].sum()) / 28.0
-        if recent_daily_spend <= 0:
-            return 1.0
-        portfolio_daily = canonical[canonical["date"] <= as_of].groupby("date")["spend"].sum()
-        if portfolio_daily.empty:
-            return 1.0
-        month_daily_mean = portfolio_daily.groupby(portfolio_daily.index.month).mean()
-        future_dates = pd.date_range(as_of + pd.Timedelta(days=1), periods=horizon_days, freq="D")
-        seasonal_daily_spend = sum(float(month_daily_mean.get(date.month, recent_daily_spend)) for date in future_dates) / horizon_days
-        # Protect sparse or regime-shifted inputs while still allowing a clear
-        # seasonal correction when historical coverage supports it.
-        return max(0.10, min(2.00, seasonal_daily_spend / recent_daily_spend))
+        return seasonal_default_budget_multiplier(canonical, as_of, horizon_days)
 
     def direct_quantiles(
         self,
@@ -97,6 +198,8 @@ class HorizonModel:
         planned_budget: float,
     ) -> tuple[float, float, float] | None:
         """Evaluate the exact direct-ridge response used by forecast inference."""
+        if self.selected_model_family(horizon_days) != "direct_ensemble":
+            return None
         direct_model = self.direct_models.get(horizon_days)
         if direct_model is None:
             return None
@@ -115,6 +218,8 @@ class HorizonModel:
         planned_budget: float,
     ) -> bool:
         """Return whether a direct-model feature row has unseen categories."""
+        if self.selected_model_family(horizon_days) != "direct_ensemble":
+            return False
         direct_model = self.direct_models.get(horizon_days)
         if direct_model is None:
             return False
@@ -166,7 +271,6 @@ class HorizonModel:
             reliability = min(1.0, active_days / self.min_history_days)
             roas = reliability * recent_roas + (1.0 - reliability) * historic_roas
             roas = (0.70 * roas + 0.30 * self.global_roas) * seasonal_factor
-            daily_spend = recent_spend / max(active_days, 1)
             campaign_key = self.campaign_key(source, campaign_id)
             override = budget_overrides.get(campaign_key)
             override_key = campaign_key if override is not None else None
@@ -177,11 +281,9 @@ class HorizonModel:
                 override_key = str(campaign_id)
             if override_key is not None:
                 consumed_override_keys.add(override_key)
-            baseline_budget = (
-                max(0.0, daily_spend * horizon_days * default_budget_multiplier)
-                if recent_spend > 0
-                else 0.0
-            )
+            baseline_budget, baseline_method, _ = campaign_baseline_budget(
+                canonical, history, as_of, horizon_days
+            ) if recent_spend > 0 else (0.0, "no_recent_delivery", 0.0)
             planned_budget = float(override) if override is not None else baseline_budget
             support = max(historic_spend / max(int(history["date"].nunique()), 1) * horizon_days, 1.0)
             extrapolation = planned_budget > 1.5 * support
@@ -195,6 +297,10 @@ class HorizonModel:
                 flags.append("budget_extrapolation")
             if planned_budget > 1.25 * baseline_budget:
                 flags.append("diminishing_returns")
+            if override is None and baseline_method == "calendar_matched_prior_year_budget":
+                flags.append("calendar_matched_prior_year_budget")
+            if override is None and baseline_method == "recent_run_rate_budget":
+                flags.append("recent_run_rate_baseline_budget")
             if override is None and default_budget_multiplier != 1.0:
                 flags.append("seasonally_adjusted_baseline_budget")
             if planned_budget <= 0:
@@ -253,6 +359,27 @@ class HorizonModel:
                     )
                     revenue_p10 = revenue_p50 * math.exp(-1.28155 * sigma)
                     revenue_p90 = revenue_p50 * math.exp(1.28155 * sigma)
+                    fallback_widths = self.fallback_interval_width_multipliers(horizon_days)
+                    if fallback_widths is not None and revenue_p50 > 0.0:
+                        # Apply the offline OOF calibration in log1p-revenue
+                        # space. P50 is intentionally left untouched: model
+                        # selection and point-forecast backtests continue to
+                        # measure the same statistical response model.
+                        lower_width, upper_width = fallback_widths
+                        log_p50 = math.log1p(revenue_p50)
+                        log_p10 = math.log1p(max(revenue_p10, 0.0))
+                        log_p90 = math.log1p(max(revenue_p90, revenue_p50))
+                        if lower_width > 1.0:
+                            revenue_p10 = max(
+                                0.0,
+                                math.expm1(log_p50 + (log_p10 - log_p50) * lower_width),
+                            )
+                        if upper_width > 1.0:
+                            revenue_p90 = max(
+                                revenue_p50,
+                                math.expm1(log_p50 + (log_p90 - log_p50) * upper_width),
+                            )
+                        flags.append("fallback_oof_interval_calibrated")
                 spend_p10, spend_p50, spend_p90 = self._spend_quantiles(history, horizon_days, planned_budget)
             rows.append({
                 "level": "campaign", "channel": channel, "campaign_type": campaign_type,

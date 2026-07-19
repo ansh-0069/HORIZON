@@ -21,13 +21,34 @@ class OptimizationResult:
     achieved_roas_p50: float
     target_roas: float | None
     explanation: str
+    allocation_method: str = "conservative_monotone_concave_test_priority_v1"
+    causal_status: str = "observational_association"
+    validation_required: bool = True
+    eligible_campaign_count: int = 0
+    guardrailed_campaign_count: int = 0
 
 
-def _fallback_marginal_revenue_per_dollar(base_budget: float, base_roas: float, allocated: float) -> float:
+def _conservative_response_revenue(base_budget: float, base_roas: float, allocated: float) -> float:
+    """Return a monotone, concave planning envelope anchored at baseline.
+
+    Historical spend is endogenous: a direct forecasting coefficient cannot be
+    interpreted as causal marginal lift.  The allocator therefore never takes
+    finite differences of the direct model. It ranks test allocations using a
+    smooth response curve that exactly matches the baseline revenue estimate,
+    has non-negative marginal return, and has diminishing marginal return for
+    every non-negative budget.
+    """
     baseline = max(base_budget, 1.0)
     scale = max(baseline * 1.5, 1.0)
     normalization = baseline / (scale * math.log1p(baseline / scale))
-    return max(0.0, base_roas * normalization / (1.0 + allocated / scale))
+    return max(0.0, base_roas * scale * math.log1p(max(allocated, 0.0) / scale) * normalization)
+
+
+def _conservative_marginal_revenue_per_dollar(base_budget: float, base_roas: float, allocated: float) -> float:
+    baseline = max(base_budget, 1.0)
+    scale = max(baseline * 1.5, 1.0)
+    normalization = baseline / (scale * math.log1p(baseline / scale))
+    return max(0.0, base_roas * normalization / (1.0 + max(allocated, 0.0) / scale))
 
 
 def recommend_allocation(
@@ -72,33 +93,23 @@ def recommend_allocation(
     target_relaxed = False
     by_channel = {channel: group.copy() for channel, group in leaves.groupby("channel")}
     step = max(100.0, round(total_budget / max(increments, 1) / 100.0) * 100.0)
-    as_of = canonical["date"].max()
-    history_by_key = {
-        model.campaign_key(source_system, campaign_id): group.copy()
-        for (source_system, campaign_id), group in canonical.groupby(["source_system", "source_campaign_id"], dropna=False)
+    guardrail_tokens = ("sparse_recent_history", "budget_extrapolation", "direct_model_category_oov_fallback")
+    guardrailed_campaigns = {
+        str(row.campaign_key)
+        for row in leaves.itertuples()
+        if any(token in str(row.quality_flags) for token in guardrail_tokens)
     }
 
     def marginal_response(row: object, current: float, addition: float) -> tuple[float, float]:
-        """Score the exact direct-ridge response used by the forecast when available."""
-        campaign_key = str(row.campaign_key)
-        history = history_by_key[campaign_key]
-        current_quantiles = model.direct_quantiles(
-            history, str(row.channel), str(row.campaign_type), as_of, horizon_days, current,
-        )
+        """Score a shape-constrained test-planning response, never a causal claim."""
+        base_budget = max(float(row.planned_budget), 1.0)
+        base_roas = max(float(row.predicted_revenue_p50) / base_budget, 0.0)
         next_budget = current + addition
-        next_quantiles = model.direct_quantiles(
-            history, str(row.channel), str(row.campaign_type), as_of, horizon_days, next_budget,
-        )
-        if current_quantiles is not None and next_quantiles is not None:
-            # A direct model may have an intercept. A zero media plan must
-            # still represent zero paid-media revenue in the allocator.
-            current_revenue = 0.0 if current <= 1e-9 else current_quantiles[1]
-            next_revenue = next_quantiles[1]
-            return max(0.0, (next_revenue - current_revenue) / max(addition, 1e-9)), next_revenue / max(next_budget, 1e-9)
-        return (
-            _fallback_marginal_revenue_per_dollar(float(row.planned_budget), float(row.predicted_roas_p50), current),
-            float(row.predicted_roas_p50),
-        )
+        current_revenue = _conservative_response_revenue(base_budget, base_roas, current)
+        next_revenue = _conservative_response_revenue(base_budget, base_roas, next_budget)
+        finite_difference = max(0.0, (next_revenue - current_revenue) / max(addition, 1e-9))
+        analytic = _conservative_marginal_revenue_per_dollar(base_budget, base_roas, current)
+        return min(finite_difference, analytic), next_revenue / max(next_budget, 1e-9)
 
     def add_to_best(channel: str, amount: float) -> float:
         remaining = amount
@@ -107,7 +118,8 @@ def recommend_allocation(
             candidates = []
             for row in group.itertuples():
                 campaign_id = str(row.campaign_key)
-                cap = float(row.planned_budget) * max_multiple_of_baseline
+                cap_multiple = 1.0 if campaign_id in guardrailed_campaigns else max_multiple_of_baseline
+                cap = float(row.planned_budget) * cap_multiple
                 current = allocations[campaign_id]
                 if current + 1e-6 >= cap:
                     continue
@@ -133,7 +145,8 @@ def recommend_allocation(
         for row in leaves.itertuples():
             campaign_id = str(row.campaign_key)
             channel = str(row.channel)
-            cap = float(row.planned_budget) * max_multiple_of_baseline
+            cap_multiple = 1.0 if campaign_id in guardrailed_campaigns else max_multiple_of_baseline
+            cap = float(row.planned_budget) * cap_multiple
             current = allocations[campaign_id]
             channel_cap = maximums.get(channel, math.inf)
             if current + 1e-6 >= cap or channel_allocated[channel] + 1e-6 >= channel_cap:
@@ -181,9 +194,12 @@ def recommend_allocation(
         achieved_roas_p50=achieved_roas,
         target_roas=target_roas,
         explanation=(
-            "Allocation uses discrete marginal returns from the same direct-ridge response used by scenario forecasts "
-            "when available, with a documented fallback curve, campaign support caps, channel constraints, and a "
-            f"{'controlled marginal-ROAS target relaxation because no fully feasible allocation met the guardrail' if target_relaxed else 'hard marginal-ROAS guardrail while feasible'}. "
-            "The selected allocation is reforecast through the shared probabilistic model."
+            "Allocation ranks campaigns with a monotone concave planning envelope anchored to each baseline forecast, "
+            "not finite differences of an observational spend-regression coefficient. Sparse, extrapolated, and OOV "
+            "campaigns cannot expand beyond baseline support. The plan is a test-priority recommendation and must be "
+            f"validated with a holdout, geo, or audience split; it uses a {'controlled marginal-ROAS target relaxation because no fully feasible allocation met the guardrail' if target_relaxed else 'hard marginal-ROAS guardrail while feasible'}. "
+            "The exact selected campaign plan is then reforecast through the shared probabilistic model."
         ),
+        eligible_campaign_count=int(len(leaves) - len(guardrailed_campaigns)),
+        guardrailed_campaign_count=int(len(guardrailed_campaigns)),
     )

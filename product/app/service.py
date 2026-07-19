@@ -37,6 +37,12 @@ MINIMUM_BACKTEST_FOLDS = 5
 MINIMUM_CALIBRATION_SAMPLES = 30
 MINIMUM_REVENUE_INTERVAL_COVERAGE = 0.60
 MINIMUM_ROAS_INTERVAL_COVERAGE = 0.50
+MINIMUM_CAMPAIGN_REVENUE_INTERVAL_COVERAGE = 0.50
+MINIMUM_CAMPAIGN_ROAS_INTERVAL_COVERAGE = 0.40
+MAXIMUM_CAMPAIGN_MISSING_FORECAST_RATE = 0.10
+MAXIMUM_REVENUE_WAPE = 0.75
+MAXIMUM_TARGET_PROBABILITY_BRIER = 0.25
+MAXIMUM_TARGET_PROBABILITY_ECE = 0.20
 
 
 def _require_object(value: Any, field: str) -> Mapping[str, Any]:
@@ -199,7 +205,7 @@ class PlannerService:
             allowed={"horizon_days", "target_roas", "channel_budgets", "campaign_budgets"},
             field="scenario",
         )
-        horizon = _require_horizon(request.get("horizon_days", 60))
+        horizon = _require_horizon(request.get("horizon_days", 30))
         target_roas = _require_finite_number(
             request.get("target_roas", self.model.target_roas), "target_roas", strictly_positive=True
         )
@@ -223,7 +229,7 @@ class PlannerService:
         if "total_budget" not in request:
             raise ValueError("total_budget is required for optimization")
         return {
-            "horizon_days": _require_horizon(request.get("horizon_days", 60)),
+            "horizon_days": _require_horizon(request.get("horizon_days", 30)),
             "target_roas": _require_finite_number(
                 request.get("target_roas", self.model.target_roas), "target_roas", strictly_positive=True
             ),
@@ -345,6 +351,7 @@ class PlannerService:
         samples = self._report_metric(horizon_report, "median_calibration_samples")
         revenue_coverage = self._report_metric(horizon_report, "revenue_interval_coverage")
         roas_coverage = self._report_metric(horizon_report, "roas_interval_coverage")
+        revenue_wape = self._report_metric(horizon_report, "revenue_wape")
         reasons: list[str] = []
         if folds is None or folds < MINIMUM_BACKTEST_FOLDS:
             reasons.append(f"{horizon_days}-day backtest has fewer than {MINIMUM_BACKTEST_FOLDS} folds.")
@@ -360,12 +367,78 @@ class PlannerService:
             reasons.append(
                 f"{horizon_days}-day observed ROAS interval coverage is below the {MINIMUM_ROAS_INTERVAL_COVERAGE:.0%} decision minimum."
             )
+        if revenue_wape is None or revenue_wape > MAXIMUM_REVENUE_WAPE:
+            reasons.append(
+                f"{horizon_days}-day revenue WAPE exceeds the {MAXIMUM_REVENUE_WAPE:.0%} decision maximum."
+            )
+
+        hierarchy = horizon_report.get("coverage_by_hierarchy")
+        campaign_metrics: dict[str, Any] = {}
+        if not isinstance(hierarchy, Mapping) or not isinstance(hierarchy.get("campaign"), Mapping):
+            reasons.append("Campaign-level coverage evidence is unavailable for a campaign-level allocation decision.")
+        else:
+            campaign = hierarchy["campaign"]
+            campaign_revenue_coverage = self._report_metric(campaign, "revenue_interval_coverage")
+            campaign_roas_coverage = self._report_metric(campaign, "roas_interval_coverage")
+            missing_forecasts = self._report_metric(campaign, "missing_forecast_observations")
+            evaluable = self._report_metric(campaign, "revenue_coverage_observations")
+            missing_rate = (
+                missing_forecasts / evaluable
+                if missing_forecasts is not None and evaluable is not None and evaluable > 0
+                else None
+            )
+            campaign_metrics = {
+                "revenue_interval_coverage": campaign_revenue_coverage,
+                "roas_interval_coverage": campaign_roas_coverage,
+                "missing_forecast_rate": missing_rate,
+                "missing_forecast_observations": None if missing_forecasts is None else int(missing_forecasts),
+            }
+            if campaign_revenue_coverage is None or campaign_revenue_coverage < MINIMUM_CAMPAIGN_REVENUE_INTERVAL_COVERAGE:
+                reasons.append(
+                    f"{horizon_days}-day campaign revenue interval coverage is below the {MINIMUM_CAMPAIGN_REVENUE_INTERVAL_COVERAGE:.0%} decision minimum."
+                )
+            if campaign_roas_coverage is None or campaign_roas_coverage < MINIMUM_CAMPAIGN_ROAS_INTERVAL_COVERAGE:
+                reasons.append(
+                    f"{horizon_days}-day campaign ROAS interval coverage is below the {MINIMUM_CAMPAIGN_ROAS_INTERVAL_COVERAGE:.0%} decision minimum."
+                )
+            if missing_rate is None or missing_rate > MAXIMUM_CAMPAIGN_MISSING_FORECAST_RATE:
+                reasons.append(
+                    f"{horizon_days}-day campaign forecast coverage has more than the {MAXIMUM_CAMPAIGN_MISSING_FORECAST_RATE:.0%} permitted missing-outcome rate."
+                )
+
+        probability_reliability = horizon_report.get("roas_target_probability_reliability")
+        probability_metrics: dict[str, Any] = {}
+        if not isinstance(probability_reliability, Mapping):
+            reasons.append("ROAS-target draw-share reliability evidence is unavailable.")
+        else:
+            probability_status = str(probability_reliability.get("status") or "unavailable")
+            brier = self._report_metric(probability_reliability, "brier_score")
+            ece = self._report_metric(probability_reliability, "expected_calibration_error")
+            probability_metrics = {
+                "status": probability_status,
+                "observations": self._report_metric(probability_reliability, "observations"),
+                "brier_score": brier,
+                "expected_calibration_error": ece,
+            }
+            if probability_status != "evaluated":
+                reasons.append("ROAS-target draw share lacks enough independent historical events for approval use.")
+            elif brier is None or brier > MAXIMUM_TARGET_PROBABILITY_BRIER:
+                reasons.append(
+                    f"ROAS-target probability Brier score exceeds the {MAXIMUM_TARGET_PROBABILITY_BRIER:.2f} decision maximum."
+                )
+            elif ece is None or ece > MAXIMUM_TARGET_PROBABILITY_ECE:
+                reasons.append(
+                    f"ROAS-target probability calibration error exceeds the {MAXIMUM_TARGET_PROBABILITY_ECE:.0%} decision maximum."
+                )
         metrics = {
             "folds": None if folds is None else int(folds),
             "median_calibration_samples": None if samples is None else int(samples),
             "revenue_interval_coverage": revenue_coverage,
             "roas_interval_coverage": roas_coverage,
+            "revenue_wape": revenue_wape,
             "nominal_interval_coverage": self._report_metric(horizon_report, "nominal_interval_coverage"),
+            "campaign": campaign_metrics,
+            "target_probability": probability_metrics,
         }
         return {
             "horizon_days": horizon_days,
@@ -396,10 +469,13 @@ class PlannerService:
         risk_items = [str(value) for value in risks["quality_flags"].dropna().unique() if str(value)]
         if not calibration_allows_approval:
             risk_items.extend(f"Calibration gate: {reason}" for reason in calibration["reasons"])
+        probability_status = calibration.get("metrics", {}).get("target_probability", {}).get("status")
         headline = (
-            f"The plan has a {float(overall['probability_roas_above_target']):.0%} modeled probability "
-            f"of achieving the {target_roas:.2f} ROAS guardrail."
+            f"The plan has a {float(overall['probability_roas_above_target']):.0%} simulated ROAS-target draw share "
+            f"at the {target_roas:.2f} guardrail."
         )
+        if probability_status != "evaluated":
+            headline += " That draw share is not yet acceptance-calibrated and cannot approve a material allocation alone."
         if not calibration_allows_approval:
             headline = (
                 f"The decision posture is revise or test: the persisted {horizon_days}-day calibration evidence "
@@ -487,6 +563,11 @@ class PlannerService:
                 "achieved_roas_p50": result.achieved_roas_p50,
                 "target_gap_p50": None if result.target_roas is None else result.achieved_roas_p50 - result.target_roas,
                 "explanation": result.explanation,
+                "allocation_method": getattr(result, "allocation_method", "conservative_monotone_concave_test_priority_v1"),
+                "causal_status": getattr(result, "causal_status", "observational_association"),
+                "validation_required": bool(getattr(result, "validation_required", True)),
+                "eligible_campaign_count": int(getattr(result, "eligible_campaign_count", 0)),
+                "guardrailed_campaign_count": int(getattr(result, "guardrailed_campaign_count", 0)),
             },
         }
         return response

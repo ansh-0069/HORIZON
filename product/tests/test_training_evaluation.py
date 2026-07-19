@@ -23,8 +23,11 @@ from product.training.train import (
     PROTECTED_MODEL_PATH,
     safe_product_output_path,
 )
+from product.training.model_builder import _fit_fallback_interval_calibration, _statistical_components
 from src.canonicalize import canonicalize
+from src.forecast import build_forecast
 from src.ingest import read_source_files
+from src.model import HorizonModel
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,7 +91,7 @@ class TrainingAndEvaluationRegressionTests(unittest.TestCase):
         model = fit_direct_ridge(self.canonical, 30)
         self.assertIsNotNone(model)
         assert model is not None
-        self.assertEqual(model.uncertainty_method, "purged_temporal_holdout_residual_quantiles_v2")
+        self.assertEqual(model.uncertainty_method, "purged_temporal_holdout_support_aware_residual_quantiles_v3")
         self.assertGreater(model.calibration_sample_count, 0)
         self.assertLessEqual(model.residual_p10, model.residual_p50)
         self.assertLessEqual(model.residual_p50, model.residual_p90)
@@ -158,6 +161,112 @@ class TrainingAndEvaluationRegressionTests(unittest.TestCase):
         self.assertEqual(canonical_fingerprint(shuffled), canonical_fingerprint(self.canonical))
         self.assertEqual(provenance["canonical_rows"], len(self.canonical))
         self.assertEqual(provenance["source_systems"], ["google_ads", "meta_ads", "microsoft_ads"])
+
+    def test_statistical_fallback_oof_calibration_widens_only_intervals(self) -> None:
+        profile = _fit_fallback_interval_calibration(self.canonical, 30)
+        self.assertEqual(profile["status"], "available")
+        self.assertEqual(profile["calibration_level"], "campaign_marginal")
+        self.assertGreaterEqual(int(profile["origin_count"]), 5)
+        self.assertGreaterEqual(int(profile["sample_count"]), 30)
+        self.assertGreaterEqual(float(profile["lower_width_multiplier"]), 1.0)
+        self.assertGreaterEqual(float(profile["upper_width_multiplier"]), 1.0)
+        self.assertGreaterEqual(
+            float(profile["calibrated_joint_coverage"]),
+            float(profile["base_joint_coverage"]),
+        )
+        portfolio_profile = profile["portfolio_interval_profile"]
+        self.assertEqual(portfolio_profile["status"], "available")
+        self.assertEqual(
+            portfolio_profile["calibration_purpose"],
+            "revenue_interval_only_not_roas_probability_calibration",
+        )
+        self.assertGreaterEqual(
+            float(portfolio_profile["calibrated_joint_coverage"]),
+            float(portfolio_profile["base_joint_coverage"]),
+        )
+
+        roas, sigma, factors = _statistical_components(self.canonical)
+        baseline = HorizonModel(
+            "test-fallback-baseline",
+            roas,
+            sigma,
+            factors,
+            {},
+            selected_model_families={30: "statistical_fallback"},
+        ).forecast_campaigns(self.canonical, 30).sort_values("campaign_key", kind="stable").reset_index(drop=True)
+        calibrated = HorizonModel(
+            "test-fallback-calibrated",
+            roas,
+            sigma,
+            factors,
+            {},
+            selected_model_families={30: "statistical_fallback"},
+            fallback_interval_calibration={30: profile},
+        ).forecast_campaigns(self.canonical, 30).sort_values("campaign_key", kind="stable").reset_index(drop=True)
+        pd.testing.assert_series_equal(
+            baseline["predicted_revenue_p50"],
+            calibrated["predicted_revenue_p50"],
+            check_names=False,
+        )
+        self.assertTrue(
+            (calibrated["predicted_revenue_p10"] <= baseline["predicted_revenue_p10"]).all()
+        )
+        self.assertTrue(
+            (calibrated["predicted_revenue_p90"] >= baseline["predicted_revenue_p90"]).all()
+        )
+        self.assertTrue(calibrated["quality_flags"].str.contains("fallback_oof_interval_calibrated").all())
+
+        raw_rollup = build_forecast(
+            HorizonModel(
+                "test-fallback-raw-rollup",
+                roas,
+                sigma,
+                factors,
+                {},
+                selected_model_families={30: "statistical_fallback"},
+            ),
+            self.canonical,
+            30,
+        )
+        calibrated_rollup = build_forecast(
+            HorizonModel(
+                "test-fallback-calibrated-rollup",
+                roas,
+                sigma,
+                factors,
+                {},
+                selected_model_families={30: "statistical_fallback"},
+                fallback_interval_calibration={30: profile},
+            ),
+            self.canonical,
+            30,
+        )
+        raw_overall = raw_rollup[raw_rollup["level"] == "overall"].iloc[0]
+        calibrated_overall = calibrated_rollup[calibrated_rollup["level"] == "overall"].iloc[0]
+        self.assertAlmostEqual(
+            float(raw_overall["predicted_revenue_p50"]),
+            float(calibrated_overall["predicted_revenue_p50"]),
+            places=6,
+        )
+        self.assertNotEqual(
+            float(raw_overall["predicted_revenue_p10"]),
+            float(calibrated_overall["predicted_revenue_p10"]),
+        )
+        self.assertIn(
+            "fallback_portfolio_oof_revenue_interval_calibration",
+            str(calibrated_overall["quality_flags"]),
+        )
+        self.assertNotIn("roas_probability_calibration", str(calibrated_overall["quality_flags"]))
+        malformed = HorizonModel(
+            "test-fallback-malformed-profile",
+            roas,
+            sigma,
+            factors,
+            {},
+            selected_model_families={30: "statistical_fallback"},
+            fallback_interval_calibration={30: {"status": "available", "portfolio_interval_profile": {}}},
+        )
+        self.assertIsNone(malformed.fallback_portfolio_interval_profile(30))
 
     def test_optional_trainer_cannot_target_the_protected_artifact(self) -> None:
         self.assertNotEqual(DEFAULT_PRODUCT_MODEL_PATH.resolve(), PROTECTED_MODEL_PATH)
